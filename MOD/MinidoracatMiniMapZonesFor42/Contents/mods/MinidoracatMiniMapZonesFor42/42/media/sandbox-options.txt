@@ -1,0 +1,4 @@
+VERSION = 1,
+
+option MinidoracatMiniMapZones.PollIntervalSeconds
+{type = integer, min = 10, max = 3600, default = 60, page = MinidoracatMiniMapZones, translation = MinidoracatMiniMapZones_PollIntervalSeconds,}

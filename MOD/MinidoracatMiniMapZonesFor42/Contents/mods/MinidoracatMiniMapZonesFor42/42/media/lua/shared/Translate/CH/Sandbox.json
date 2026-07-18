@@ -1,0 +1,5 @@
+{
+    "Sandbox_MinidoracatMiniMapZones": "Minidoracat 地圖區域",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds": "區域資料輪詢間隔（秒）",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds_tooltip": "伺服器多久重新讀取一次 zones.json 並檢查是否有變更（內容沒變不會廣播）。值越小更新越即時，但增加伺服器 IO 負擔。管理員也可用 /reloadzones 立即強制刷新，不受此間隔限制。"
+}

@@ -1,0 +1,7 @@
+# PZ Lua/JSON 對行尾敏感，統一 LF
+*.json text eol=lf
+*.lua text eol=lf
+*.txt text eol=lf
+*.ps1 text eol=lf
+*.bat text eol=lf
+*.md text eol=lf
