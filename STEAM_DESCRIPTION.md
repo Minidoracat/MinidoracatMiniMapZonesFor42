@@ -28,6 +28,14 @@
 [*] [b]單機／多人皆可用[/b]：單機直接讀取本地 `zones.json`；多人由伺服器統一驗證與廣播
 [/list]
 
+[h2]🔗 系列 MOD[/h2]
+[list]
+[*] [b]主 MOD（必裝，0.8.0+）[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap for B42[/url]——地圖圖片化本體
+[*] [b]本頁[/b]：Zones——伺服器自訂區域顯示
+[*] [b]選裝[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763914102]MOD Maps[/url]——地圖 MOD 圖像包
+[*] [b]選裝[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3765182411]MOD Compatibility[/url]——第三方 MOD 相容包（狗、馬等動物圖標）
+[/list]
+
 [h2]📋 MOD 資訊[/h2]
 [list]
 [*] [b]Mod ID:[/b] MinidoracatMiniMapZonesFor42
@@ -44,4 +52,5 @@
 
 [b]#地圖 #小地圖 #minimap #worldmap #Minidoracat[/b]
 
+Workshop ID: 3768276209
 Mod ID: MinidoracatMiniMapZonesFor42

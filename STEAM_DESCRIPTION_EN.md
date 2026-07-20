@@ -29,6 +29,14 @@ If the main MOD is missing or too old, this pack silently degrades — no zones 
 [*] [b]Singleplayer & multiplayer[/b]: SP reads the local `zones.json` directly; MP is validated and broadcast by the server
 [/list]
 
+[h2]🔗 MOD series[/h2]
+[list]
+[*] [b]Main MOD (required, 0.8.0+)[/b]: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap for B42[/url] — the image-based map core
+[*] [b]This page[/b]: Zones — server custom-zone display
+[*] [b]Optional[/b]: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763914102]MOD Maps[/url] — map pack addon for map MODs
+[*] [b]Optional[/b]: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3765182411]MOD Compatibility[/url] — third-party compatibility pack (animal icons for dogs, horses, etc.)
+[/list]
+
 [h2]📋 MOD info[/h2]
 [list]
 [*] [b]Mod ID:[/b] MinidoracatMiniMapZonesFor42
@@ -45,4 +53,5 @@ If the main MOD is missing or too old, this pack silently degrades — no zones 
 
 [b]#map #minimap #worldmap #Minidoracat[/b]
 
+Workshop ID: 3768276209
 Mod ID: MinidoracatMiniMapZonesFor42

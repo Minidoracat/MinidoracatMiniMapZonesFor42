@@ -1,5 +1,5 @@
 version=1
-id=
+id=3768276209
 title=Minidoracat MiniMap Zones for B42
 description=[h1]🗺️ Minidoracat MiniMap Zones[/h1]
 description=[h3]By Minidoracat[/h3]
@@ -32,6 +32,14 @@ description=[*] [b]Fault-tolerant data[/b]: malformed or over-limit entries are 
 description=[*] [b]Singleplayer & multiplayer[/b]: SP reads the local `zones.json` directly; MP is validated and broadcast by the server
 description=[/list]
 description=
+description=[h2]🔗 MOD series[/h2]
+description=[list]
+description=[*] [b]Main MOD (required, 0.8.0+)[/b]: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap for B42[/url] — the image-based map core
+description=[*] [b]This page[/b]: Zones — server custom-zone display
+description=[*] [b]Optional[/b]: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763914102]MOD Maps[/url] — map pack addon for map MODs
+description=[*] [b]Optional[/b]: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3765182411]MOD Compatibility[/url] — third-party compatibility pack (animal icons for dogs, horses, etc.)
+description=[/list]
+description=
 description=[h2]📋 MOD info[/h2]
 description=[list]
 description=[*] [b]Mod ID:[/b] MinidoracatMiniMapZonesFor42
@@ -48,6 +56,7 @@ description=[url=https://www.twitch.tv/minidoracat]🎬 Twitch channel[/url]
 description=
 description=[b]#map #minimap #worldmap #Minidoracat[/b]
 description=
+description=Workshop ID: 3768276209
 description=Mod ID: MinidoracatMiniMapZonesFor42
 tags=Build 42;Interface;Map;Multiplayer
 visibility=public

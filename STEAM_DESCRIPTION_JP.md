@@ -29,6 +29,14 @@
 [*] [b]シングル／マルチ両対応[/b]：シングルプレイはローカルの `zones.json` を直接読み込み、マルチプレイはサーバーが検証・配信
 [/list]
 
+[h2]🔗 シリーズ MOD[/h2]
+[list]
+[*] [b]本体 MOD（必須、0.8.0+）[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap for B42[/url]——地図画像化の本体
+[*] [b]このページ[/b]：Zones——サーバーカスタムゾーン表示
+[*] [b]任意[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763914102]MOD Maps[/url]——マップ MOD 用マップパック addon
+[*] [b]任意[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3765182411]MOD Compatibility[/url]——サードパーティ MOD 互換パック（犬・馬などの動物アイコン）
+[/list]
+
 [h2]📋 MOD 情報[/h2]
 [list]
 [*] [b]Mod ID:[/b] MinidoracatMiniMapZonesFor42
@@ -45,4 +53,5 @@
 
 [b]#map #minimap #worldmap #Minidoracat[/b]
 
+Workshop ID: 3768276209
 Mod ID: MinidoracatMiniMapZonesFor42

@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 """Zones 包 poster/preview 產生器（家族流程：主 repo scripts/poster/finish_posters.py 同款
-告示板/警戒紋/膠帶語彙）。主視覺＝docs/screenshots/server-zones-demo.png 的地圖區裁切
-（橙色多矩形示範區域入鏡＝功能實照），疊 PZ 風標題板＋ADD-ON 徽章。
+告示板/警戒紋/膠帶語彙）。主視覺＝zones_art.png（codex imagegen 依主 repo
+scripts/poster/mascot.png 生成的家族吉祥物插畫，同 main_art/maps_art 流程；
+換構圖才需重新生成主視覺，改標題只要重跑本腳本），疊 PZ 風標題板＋ADD-ON 徽章。
 Deterministic：無隨機數。輸出：42/poster.png 與 MOD 根 preview.png（512×512）。"""
 import os
 from PIL import Image, ImageDraw, ImageFont
 
 SP = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(SP, "..", ".."))
-SRC = os.path.join(REPO, "docs", "screenshots", "server-zones-demo.png")
+SRC = os.path.join(SP, "zones_art.png")
 MOD_DIR = os.path.join(REPO, "MOD", "MinidoracatMiniMapZonesFor42")
 OUT_POSTER = os.path.join(MOD_DIR, "Contents", "mods", "MinidoracatMiniMapZonesFor42",
                           "42", "poster.png")
@@ -58,22 +59,10 @@ def hazard_strip(draw, x0, y0, x1, y1, step=26):
 
 
 def zones_art():
-    # 地圖窗格裁切（螢幕 1920×1009；設定視窗約至 x=1080，地圖窗格 x≈1090-1910）：
-    # 取 820×820 正方（x 1090-1910、y 30-850）→ 橙色示範區域與玩家標記居中偏右；
-    # 下緣停在「點擊地圖回到玩家」提示（y≈855 起）與按鈕列（y≈890 起）之上
-    shot = Image.open(SRC).convert("RGBA")
-    art = shot.crop((1090, 30, 1910, 850)).resize((1024, 1024), Image.LANCZOS)
-    # 輕微暗角讓標題板浮出（頂/底漸層）
-    grad = Image.new("L", (1, 1024))
-    for y in range(1024):
-        v = 0
-        if y < 200:
-            v = int(90 * (1 - y / 200))
-        elif y > 720:
-            v = int(150 * ((y - 720) / 304))
-        grad.putpixel((0, y), v)
-    shade = Image.new("RGBA", (1024, 1024), (10, 10, 8, 255))
-    art = Image.composite(shade, art, grad.resize((1024, 1024)))
+    # 主視覺插畫（構圖已預留底部暗區給標題板，毋須再壓暗角）
+    art = Image.open(SRC).convert("RGBA")
+    if art.size != (1024, 1024):
+        art = art.resize((1024, 1024), Image.LANCZOS)
     return art
 
 
