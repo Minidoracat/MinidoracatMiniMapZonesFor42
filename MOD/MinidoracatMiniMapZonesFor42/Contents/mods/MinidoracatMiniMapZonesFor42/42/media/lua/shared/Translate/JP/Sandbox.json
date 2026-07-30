@@ -1,5 +1,5 @@
 {
     "Sandbox_MinidoracatMiniMapZones": "Minidoracat マップゾーン",
     "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds": "ゾーンデータのポーリング間隔（秒）",
-    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds_tooltip": "サーバーが zones.json を再読み込みして変更を確認する間隔です（内容に変更が無ければ配信しません）。値を小さくすると更新が速くなりますが、サーバーの IO 負荷が増えます。管理者はこの間隔に関係なく /reloadzones で即座に強制更新できます。"
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds_tooltip": "サーバーが zones.txt を再読み込みして変更を確認する間隔です（内容に変更が無ければ配信しません）。値を小さくすると更新が速くなりますが、サーバーの IO 負荷が増えます。管理者はこの間隔に関係なく /reloadzones で即座に強制更新できます。"
 }

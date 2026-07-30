@@ -1,7 +1,7 @@
 name=Minidoracat MiniMap Zones
 id=MinidoracatMiniMapZonesFor42
-description=[B42]Minidoracat 小地圖主 MOD 的伺服器自訂區域 addon：伺服器端 zones.json 定義半透明填色區域＋框線＋名稱（外部程式可寫入），伺服器驗證後即時廣播；含自動示範範本、設定頁多語生成按鈕（時間戳備份）與 /reloadzones 指令。需主 MOD 42.19.0-0.8.0 以上。By Minidoracat
+description=[B42]Minidoracat 小地圖主 MOD 的伺服器自訂區域 addon：伺服器端 zones.txt（JSON 格式）定義半透明填色區域＋框線＋名稱（外部程式可寫入；42.19 舊 zones.json 首次啟動自動遷移），伺服器驗證後即時廣播；含自動示範範本、設定頁多語生成按鈕（時間戳備份）與 /reloadzones 指令。需主 MOD 42.19.0-0.8.0 以上。By Minidoracat
 require=MinidoracatMiniMapFor42
 poster=poster.png
-modversion=42.19.0-0.1.0
-versionMin=42.19.0
+modversion=42.20.0-0.2.0
+versionMin=42.20.0

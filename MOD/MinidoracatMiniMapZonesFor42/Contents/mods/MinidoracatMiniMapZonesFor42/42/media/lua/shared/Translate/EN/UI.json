@@ -1,6 +1,6 @@
 {
     "UI_MinidoracatMiniMapZones_ServerZones": "Show server zones",
-    "UI_MinidoracatMiniMapZones_ServerZones_tooltip": "Show custom zones pushed by the server via zones.json (translucent fill + border + name). Vanilla map resource points (POI) are now built into the main MOD, not this addon.",
+    "UI_MinidoracatMiniMapZones_ServerZones_tooltip": "Show custom zones pushed by the server via zones.txt (translucent fill + border + name). Vanilla map resource points (POI) are now built into the main MOD, not this addon.",
     "UI_MinidoracatMiniMapZones_ReloadSent": "Sent /reloadzones reload request...",
     "UI_MinidoracatMiniMapZones_ReloadResult": "Zone data reloaded (%1 zones)",
     "UI_MinidoracatMiniMapZones_ReloadFailed": "Zone data reload failed: %1",
@@ -10,15 +10,15 @@
     "UI_MinidoracatMiniMapZones_TplMultiRect": "Demo zone: multi-rect L-shape (Riverside)",
     "UI_MinidoracatMiniMapZones_TplDoc": "Zones are map display markers only -- they do not affect gameplay (this mod has no PVP/safe-zone mechanics). The zones above are demos; edit or delete them freely. Add \"enabled\": false to a zone to hide it without deleting (omitted means true). Coordinates are world square coordinates [x1,y1,x2,y2] (top-left to bottom-right). You can edit them in any language (the file is read as UTF-8). Changes take effect after the poll interval, or immediately when an admin runs /reloadzones -- no restart needed.",
     "UI_MinidoracatMiniMapZones_GenTemplate": "Generate zones template",
-    "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "Generate a zones.json template with four demo zones in the chosen language and apply it immediately. If zones.json is empty or missing it is written directly; if it already has content, the old file is first backed up to a timestamped file (e.g. zones.json.20260101-120000.bak; each generation keeps its own backup) before being overwritten. If the backup fails, zones.json is left untouched. On a server this requires the \"manage mods\" permission.",
+    "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "Generate a zones.txt template with four demo zones in the chosen language and apply it immediately. If zones.txt is empty or missing it is written directly; if it already has content, the old file is first backed up to a timestamped file (e.g. zones.20260101-120000.bak.txt; each generation keeps its own backup) before being overwritten. If the backup fails, zones.txt is left untouched. On a server this requires the \"manage mods\" permission.",
     "UI_MinidoracatMiniMapZones_LangCurrent": "Follow current language",
     "UI_MinidoracatMiniMapZones_LangCH": "繁體中文",
     "UI_MinidoracatMiniMapZones_LangCN": "简体中文",
     "UI_MinidoracatMiniMapZones_LangEN": "English",
     "UI_MinidoracatMiniMapZones_LangJP": "日本語",
-    "UI_MinidoracatMiniMapZones_GenConfirm": "Generate the zones template in \"%1\"?\\nThe current zones.json will be backed up to a timestamped .bak file, then overwritten.",
+    "UI_MinidoracatMiniMapZones_GenConfirm": "Generate the zones template in \"%1\"?\\nThe current zones.txt will be backed up to a timestamped .bak.txt file, then overwritten.",
     "UI_MinidoracatMiniMapZones_GenSent": "Sent template generation request...",
     "UI_MinidoracatMiniMapZones_GenResult": "Template written to %1",
-    "UI_MinidoracatMiniMapZones_GenResultBackup": "Previous zones.json backed up to %1, then the template was written",
+    "UI_MinidoracatMiniMapZones_GenResultBackup": "Previous zones.txt backed up to %1, then the template was written",
     "UI_MinidoracatMiniMapZones_GenFailed": "Template generation failed: %1"
 }

@@ -1,8 +1,8 @@
 -- MinidoracatZonesShared.lua
--- Zones 驗證器＋wire 短欄位名編解碼——server（讀 zones.json）與 client（SP fallback，
--- 見計畫 Phase 3 step 8）共用。純資料驗證，不碰檔案 IO、不碰網路，方便兩端呼叫同一套規則。
+-- Zones 驗證器＋wire 短欄位名編解碼——server（讀 zones.txt）與 client（SP fallback，
+-- 見計畫 Phase 3 step 8）共用。純資料驗證＋檔名契約與 legacy 遷移，方便兩端呼叫同一套規則。
 --
--- 整檔上限閘（外部程式可寫 zones.json＝信任邊界，見 AGENTS.md）：
+-- 整檔上限閘（外部程式可寫 zones.txt＝信任邊界，見 AGENTS.md）：
 --   總 zone 數 ≤ maxZones、單 zone rects 數 ≤ maxRectsPerZone、
 --   meta 序列化粗估 ≤ maxMetaBytes/zone、原始檔 ≤ maxFileBytes
 --   （maxFileBytes 由呼叫端在 decode 之前對檔案位元組長度檢查，見計畫 Phase 3 step 5；
@@ -14,10 +14,32 @@
 --   { id=string, name=string, rects={ {x1=,y1=,x2=,y2=}, ... },
 --     fill={r=,g=,b=}, fillAlpha=number, border={r=,g=,b=}, borderAlpha=number,
 --     category=string|nil, meta=table|nil }
--- 輸入（zones.json 的單一 zone，見 AGENTS.md schema）用 positional 陣列：
+-- 輸入（zones.txt 的單一 zone，見 AGENTS.md schema）用 positional 陣列：
 --   rects={ {x1,y1,x2,y2}, ... }、fill={r,g,b} 或 "#RRGGBB"
 
 MinidoracatZonesShared = MinidoracatZonesShared or {}
+
+-------------------------------------------------------------------------------
+-- 檔名契約（42.20 起）：PZ 42.20 getFileWriter 新增副檔名白名單 {ini,cfg,txt,log}
+-- （LuaManager.java:2726 ALLOWED_FILE_EXTENSIONS、:6716 判定，不合白名單**靜默回
+-- null**），.json/.bak 一律寫不出。故 0.2.0 起正典檔改 zones.txt（**內容仍為 JSON
+-- 格式**，僅副檔名改變）；zones.json 為 42.19 legacy——僅讀（getFileReader 無白名單，
+-- LuaManager.java:5919-5950）、永不寫，首次啟動一次性遷移進 zones.txt
+-- （見 migrateLegacyZones）。外部程式 0.2.0 起請改寫 zones.txt。
+-------------------------------------------------------------------------------
+MinidoracatZonesShared.ZONES_DIR = "MinidoracatMiniMapZones"
+MinidoracatZonesShared.ZONES_FILENAME = "zones.txt"
+MinidoracatZonesShared.ZONES_FILENAME_LEGACY = "zones.json"
+
+function MinidoracatZonesShared.zonesPath()
+    return MinidoracatZonesShared.ZONES_DIR .. getFileSeparator()
+        .. MinidoracatZonesShared.ZONES_FILENAME
+end
+
+function MinidoracatZonesShared.zonesLegacyPath()
+    return MinidoracatZonesShared.ZONES_DIR .. getFileSeparator()
+        .. MinidoracatZonesShared.ZONES_FILENAME_LEGACY
+end
 
 MinidoracatZonesShared.LIMITS = {
     maxZones = 500,
@@ -335,7 +357,7 @@ local function validateOneZone(raw, index, limits, errors)
     return zone
 end
 
--- 輸入收 { zones = {...} }（zones.json 常見外層）或直接陣列（json.decode 一個
+-- 輸入收 { zones = {...} }（zones.txt 常見外層）或直接陣列（json.decode 一個
 -- JSON 陣列時就是這形狀）。壞條目跳過並記錯，不使整檔失效。
 function MinidoracatZonesShared.validateZones(rawTable)
     local errors = {}
@@ -466,21 +488,24 @@ function MinidoracatZonesShared.djb2(str)
 end
 
 -------------------------------------------------------------------------------
--- 範本：Zomboid/Lua/MinidoracatMiniMapZones/zones.json。兩種入口——
+-- 範本：Zomboid/Lua/MinidoracatMiniMapZones/zones.txt。兩種入口——
 --   ensureZonesTemplate（首次啟動，檔不存在→含四個示範區域，玩家照著改）；
 --   ensureZonesTemplateEmpty（執行期檔案消失→重生空範本 { "zones": [] }，區域清空但檔案隨時
---     存在，保留「刪檔＝清空」語意）。兩者共用內部 writeZonesTemplate（probe＋_doc＋IO）。
+--     存在，保留「刪檔＝清空」語意）。兩者共用內部 writeZonesTemplate（遷移閘＋probe＋_doc＋IO）。
 -- server（OnServerStarted／pollNow）與 client SP fallback（首讀前／spPollNow）呼叫；
 -- MP client 絕不呼叫（伺服器權威，見 client 檔）。
 --
--- 引擎 API 出處（AGENTS.md 鐵則：禁憑記憶寫 PZ API）：
---   getFileWriter(filename, createIfNull, append) → LuaManager.java:6636-6672
+-- 引擎 API 出處（AGENTS.md 鐵則：禁憑記憶寫 PZ API；行號為 42.20 反編譯）：
+--   getFileWriter(filename, createIfNull, append) → LuaManager.java:6715-6751
+--     · **42.20 副檔名白名單** {ini,cfg,txt,log}（ALLOWED_FILE_EXTENSIONS :2726、
+--       判定 :6716）——不合白名單**靜默回 null**，這是 0.2.0 全面改 .txt 的根因
 --     · root＝getLuaCacheDir()（Zomboid/Lua/，與 getFileReader 同根）；filename 內 `/`\`
---       皆 normalize 成 File.separator，父資料夾 mkdirs() 自動建（:6646-6648）
+--       皆 normalize 成 File.separator，父資料夾 mkdirs() 自動建
 --     · createIfNull=true → 檔不存在時建檔；UTF-8 PrintWriter
 --     vanilla 用例 getFileWriter(name,true,false)：client/PZAPI/ModOptions.lua:260
 --   writer:write(str) → client/ISUI/ISLayoutManager.lua:174；writer:close() → :185
---   getFileReader 探測存在（reader nil＝不存在）＋ reader:close() → client/PZAPI/ModOptions.lua:289
+--   getFileReader（**無白名單**，.json 仍可讀）→ LuaManager.java:5919-5950；
+--     探測存在（reader nil＝不存在）＋ reader:close() → client/PZAPI/ModOptions.lua:289
 --
 -- 字串是否含非空白字元（byte 掃描，**不用 pattern**）。空白＝space(32) 與控制字元 9(TAB)
 -- 10(LF) 11(VT) 12(FF) 13(CR)。writeZonesTemplate probe（0-byte／全空白視同缺檔）與
@@ -495,6 +520,21 @@ function MinidoracatZonesShared.hasNonBlank(s)
         end
     end
     return false
+end
+
+-- 探測檔案內容三態：nil＝不存在；false＝存在但 0-byte/全空白；true＝存在且有非空白內容。
+-- writeZonesTemplate 的「0-byte/全空白視同缺檔」probe 與 legacy 遷移共用（單一語意來源）。
+local function probeFileContent(path)
+    local reader = getFileReader(path, false)
+    if not reader then return nil end
+    local hasContent = false
+    while true do
+        local line = reader:readLine()
+        if line == nil then break end
+        if MinidoracatZonesShared.hasNonBlank(line) then hasContent = true; break end
+    end
+    reader:close()
+    return hasContent
 end
 
 -- JSON 字串跳脫 helper（範本組字用）。**逐 byte 掃描，完全不用 gsub/pattern**——真機證據
@@ -537,7 +577,7 @@ end
 --     IndieFileLoader.getStreamReader 取 reader（LuaManager.java:1342）；主路徑雖 UTF-8，但 catch
 --     fallback 以 new InputStreamReader(fisx) 無 charset 參數＝平台預設（zh-TW＝CP950）
 --     （IndieFileLoader.java:26）。故 .lua 字面值裡的 UTF-8 中文一旦走該 fallback 載入即毀成亂碼＋
---     原始控制字元 → 寫出的 zones.json 破格、parser 嚴拒 → decode 失敗、示範區域消失。
+--     原始控制字元 → 寫出的 zones.txt 破格、parser 嚴拒 → decode 失敗、示範區域消失。
 --   → 結論：中文/日文只住翻譯 JSON（走 getText）；.lua 內的 fallback 字串必須維持純 ASCII 英文。
 -- getTextOrNull 可用性佐證（server/shared context）：LuaManager 以 @LuaMethod(global=true) 註冊
 --   getText/getTextOrNull（LuaManager.java:8512-8564），client 與 server VM 共用；vanilla server lua
@@ -557,7 +597,7 @@ local function tplText(key, fallbackAscii)
     return s
 end
 
--- 內部：寫 zones.json 範本。zoneLines＝"zones" 陣列的內容行（demo 帶 3 筆、空範本傳 {}）。
+-- 內部：寫 zones.txt 範本。zoneLines＝"zones" 陣列的內容行（demo 帶 3 筆、空範本傳 {}）。
 -- 先 probe：檔已存在「且含非空白內容」才視為已存在、回 true；否則組完整內容後寫入。
 -- _doc 走 getText（依語系生成可讀文字，見 tplText/tplJsonEscape 註解）；座標/顏色為結構常數。
 -- 呼叫端已用 pcall 包裹（見 ensureZonesTemplate/ensureZonesTemplateEmpty），此處直接做 IO。
@@ -593,20 +633,147 @@ local function assembleTemplate(zoneLines, docEscaped)
     return table.concat(out, "\n")
 end
 
-local function writeZonesTemplate(zoneLines)
-    local path = "MinidoracatMiniMapZones" .. getFileSeparator() .. "zones.json"
-    local reader = getFileReader(path, false)
-    if reader then
-        local hasContent = false
-        while true do
-            local line = reader:readLine()
-            if line == nil then break end
-            if MinidoracatZonesShared.hasNonBlank(line) then hasContent = true; break end
-        end
-        reader:close()
-        if hasContent then return true end  -- 已存在且非空 → 不覆寫
-        -- 落到這＝存在但 0-byte／全空白 → 視同不存在，續往下重寫範本
+-- legacy 遷移 marker：Zomboid/Lua/MinidoracatMiniMapZones/legacyMigratedV1.txt。
+-- 語意＝「zones.json 的一次性處置已完成」。marker 存在後，刪除 zones.txt 的行為：
+-- 執行期刪除→重生「空範本」（清空區域）；關服期間刪除→下次啟動重生「示範範本」
+-- （同 0.1.0 既有語意）——兩者皆**絕不**從殘留的舊 zones.json 復活資料（Lua 無法
+-- 刪除 legacy 檔，只能靠 marker 判定）。比照主 MOD keyMigratedV1/imageryForcedV1 先例。
+local function legacyMarkerPath()
+    return MinidoracatZonesShared.ZONES_DIR .. getFileSeparator() .. "legacyMigratedV1.txt"
+end
+
+local function writeLegacyMarker(note)
+    local w = getFileWriter(legacyMarkerPath(), true, false)
+    if not w then return false end
+    w:write("MinidoracatMiniMapZones legacy handled: " .. tostring(note) .. "\n")
+    w:close()
+    return true
+end
+
+-- 一次性 legacy 遷移：zones.json（42.19 舊檔）→ zones.txt（內容原樣逐行搬運）。
+-- 回傳三態："migrated"＝已搬入 zones.txt；"none"＝無需遷移（marker 已在／無 legacy／
+-- legacy 全空白／zones.txt 已有內容）；false＝遷移失敗（legacy 超過 1MB 上限／不可讀／
+-- 寫入失敗／讀回驗證不符／例外／「有資料可復活」分支 marker 寫不出）——此時
+-- **不寫 marker**，下次啟動自動重試。marker 嚴格性只施於「legacy/txt 有內容」分支
+--（不變式承載）；無 legacy／全空白分支容忍 marker 失敗（無資料可復活，下次重探）。
+-- 例外（reader/writer 物件拋錯）由外層 pcall 收斂為 false 並快取——防同 session 重跑
+-- 經「txt 已有內容」快速路徑把半寫檔追認成正典；若 body 已寫過 txt 再 truncate。
+--
+-- session 快取：終態（"migrated"/"none"/false）本 session 只算一次——防 oversize legacy
+-- 被 pollNow→ensureZonesTemplateEmpty 穩態迴圈每輪重掃 1MB。false 亦快取（本 session
+-- 不再嘗試），下次啟動（新 Lua VM）重試。離線測試以 _migrateSessionResult = nil 重置。
+--
+-- 已知殘餘（刻意取捨）：讀回不符→truncate 本身再失敗（雙重 IO 失敗）時，壞檔會留到
+-- 下次啟動被快速路徑追認——損害有界（legacy 原檔完好在磁碟上，可手動複製回復；
+-- pollNow 每輪 parse failed log 可見），不為此加第三個 pending 狀態檔。
+local migrateTouchedTxt = false  -- body 是否已寫過 zones.txt（外層例外處置用）
+
+local function migrateLegacyZonesBody()
+    if probeFileContent(legacyMarkerPath()) ~= nil then return "none" end  -- 已處理過
+    local txtPath = MinidoracatZonesShared.zonesPath()
+    if probeFileContent(txtPath) == true then
+        -- 正典 zones.txt 已有內容（例：使用者/外部程式已自行建立）→ 補 marker。
+        -- marker 是「絕不從殘留 legacy 復活」不變式的承載者：寫失敗必須回 false
+        -- （否則之後刪 zones.txt 會復活舊 json）。回 false 只延後範本寫入，
+        -- readRawZones 讀檔照常，功能不受影響。
+        if not writeLegacyMarker("zones.txt already present") then return false end
+        return "none"
     end
+    -- 讀 legacy（帶 1MB 上限，同 readRawZones 語意：外部檔＝信任邊界，不無界吃記憶體）
+    local reader = getFileReader(MinidoracatZonesShared.zonesLegacyPath(), false)
+    if not reader then
+        -- 42.20 getFileReader 對「不存在」與「存在但開檔 IOException」都回 null。
+        -- 用 cacheFileExists（同根 CacheDir/Lua 的純 exists 檢查、@LuaMethod 全域，
+        -- 42.20 反編譯 LuaManager.java:5527-5536）區分：存在但打不開 → 不寫 marker
+        -- （否則 legacy 永不遷移），回 false 下次啟動重試。nil-safe：離線測試環境
+        -- 無此全域時視同不存在（維持既有語意）。
+        local okEx, exists = pcall(function()
+            return cacheFileExists ~= nil
+                and cacheFileExists(MinidoracatZonesShared.zonesLegacyPath()) or false
+        end)
+        if okEx and exists then return false end
+        writeLegacyMarker("no legacy zones.json")  -- 確認不存在；marker 失敗可容忍（下次重探）
+        return "none"
+    end
+    local maxBytes = MinidoracatZonesShared.LIMITS.maxFileBytes
+    local parts, total, hasContent = {}, 0, false
+    while true do
+        local line = reader:readLine()
+        if line == nil then break end
+        total = total + MinidoracatZonesShared.utf8ByteLen(line) + 1
+        if total > maxBytes then reader:close(); return false end
+        parts[#parts + 1] = line
+        if MinidoracatZonesShared.hasNonBlank(line) then hasContent = true end
+    end
+    reader:close()
+    if not hasContent then
+        writeLegacyMarker("legacy zones.json blank")  -- 空白無資料可復活，同上可容忍
+        return "none"
+    end
+    -- 尾端空行剝除：readLine 拿不到行終止符，"...}\n\n" 結尾會多一個 "" 元素——若保留，
+    -- 寫出後讀回必少該空元素、驗證必不符（合法舊檔被誤判失敗、無限重試）。剝掉尾端 ""
+    -- 使 write→readLine 冪等（只餘行終止符差異，同備份驗證的既知限制）。
+    while #parts > 0 and parts[#parts] == "" do parts[#parts] = nil end
+    local content = table.concat(parts, "\n")
+    -- 寫 zones.txt＋逐行讀回驗證：getFileWriter 包 PrintWriter，IO 失敗被吞不拋
+    -- （同 generateTemplateForLanguage 備份驗證的根因）——驗證通過才寫 marker。
+    local writer = getFileWriter(txtPath, true, false)
+    if not writer then return false end
+    migrateTouchedTxt = true
+    writer:write(content)
+    writer:close()
+    local verify = getFileReader(txtPath, false)
+    local backParts = {}
+    if verify then
+        while true do
+            local line = verify:readLine()
+            if line == nil then break end
+            backParts[#backParts + 1] = line
+        end
+        verify:close()
+    end
+    if not verify or table.concat(backParts, "\n") ~= content then
+        -- 讀回不符＝損壞內容已落在正典檔上（Lua 無刪檔 API）。必須清空回「全空白視同
+        -- 缺檔」再回 false——否則下一次呼叫的「txt 已有內容」快速路徑會用 marker 把
+        -- 壞檔追認成正典、永久遮蔽 legacy（getFileWriter append=false 即 truncate，
+        -- 42.20 反編譯 LuaManager.java:6738 FileOutputStream(outFile, append)）。
+        local zap = getFileWriter(txtPath, true, false)
+        if zap then zap:write(""); zap:close() end
+        return false
+    end
+    if not writeLegacyMarker("migrated from zones.json") then return false end
+    return "migrated"
+end
+
+function MinidoracatZonesShared.migrateLegacyZones()
+    if MinidoracatZonesShared._migrateSessionResult ~= nil then
+        return MinidoracatZonesShared._migrateSessionResult
+    end
+    migrateTouchedTxt = false
+    local ok, r = pcall(migrateLegacyZonesBody)
+    if not ok then
+        if migrateTouchedTxt then
+            -- 例外前已寫過 txt＝狀態未知，best-effort truncate（同讀回不符路徑的理由）
+            pcall(function()
+                local zap = getFileWriter(MinidoracatZonesShared.zonesPath(), true, false)
+                if zap then zap:write(""); zap:close() end
+            end)
+        end
+        r = false
+    end
+    MinidoracatZonesShared._migrateSessionResult = r
+    return r
+end
+
+local function writeZonesTemplate(zoneLines)
+    -- 進範本判定前先跑一次性 legacy 遷移（marker 閘，重入安全）。遷移失敗（false）＝
+    -- legacy 有內容但搬不進 zones.txt → **中止範本寫入**：若在此寫範本，下次啟動
+    -- probe 會把範本誤判成正典、寫 marker，legacy 舊資料被示範範本永久遮蔽。
+    if MinidoracatZonesShared.migrateLegacyZones() == false then return false end
+    local path = MinidoracatZonesShared.zonesPath()
+    local probed = probeFileContent(path)
+    if probed == true then return true end  -- 已存在且非空 → 不覆寫（含剛遷移完成的情況）
+    -- nil／false（不存在／0-byte／全空白）→ 重寫範本
     -- 先組完整內容（此前任何失敗都在建檔之前）
     local content = assembleTemplate(zoneLines,
         tplJsonEscape(tplText("UI_MinidoracatMiniMapZones_TplDoc", DEMO_DOC_ASCII)))
@@ -663,12 +830,13 @@ end
 
 -- 生成指定語系範本（設定頁面按鈕觸發）。langCode: nil＝跟隨當前（tplText/getText）；
 -- "CH"/"CN"/"EN"/"JP"＝從 TPL_STRINGS_JSON 取對應語言（不動 Translator）。
--- 備份＋直接套用語意：zones.json 不存在／全空白 → 直接寫 zones.json（backedUp=false）；
--- 已有內容 → 先把舊內容原樣備份到同目錄 zones.json.<時間戳>.bak（每次生成各自保留、不互相
--- 覆蓋；同秒內連按仍同名覆蓋，可接受），備份成功才覆寫 zones.json（backedUp=true）。
--- 備份失敗（getFileWriter .bak 回 nil／IO 例外）→ 中止，zones.json 一位元組不動、回 ok=false
--- ——絕不在沒有備份的情況下覆蓋使用者的 zones.json。
--- 回傳 { ok = bool, wrotePath = "zones.json"|nil, backedUp = bool, bakName = string|nil }。
+-- 備份＋直接套用語意：zones.txt 不存在／全空白 → 直接寫 zones.txt（backedUp=false）；
+-- 已有內容 → 先把舊內容原樣備份到同目錄 zones.<時間戳>.bak.txt（尾綴 .txt＝過 42.20
+-- 副檔名白名單；每次生成各自保留、不互相覆蓋；同秒內連按仍同名覆蓋，可接受），
+-- 備份成功才覆寫 zones.txt（backedUp=true）。
+-- 備份失敗（getFileWriter 回 nil／IO 例外）→ 中止，zones.txt 一位元組不動、回 ok=false
+-- ——絕不在沒有備份的情況下覆蓋使用者的 zones.txt。
+-- 回傳 { ok = bool, wrotePath = "zones.txt"|nil, backedUp = bool, bakName = string|nil }。
 -- 全段 pcall（組字/decode/IO 任一失敗都回 ok=false 不炸呼叫端；桌面測試對 CJK \u 的
 -- string.char range-error 亦於此被吞成 ok=false）。
 -- ponytail: 備份經 readLine 逐行 concat("\n") 還原，為「逐行內容一致」（JSON 可還原），行尾符/CRLF
@@ -695,10 +863,16 @@ function MinidoracatZonesShared.generateTemplateForLanguage(langCode)
             buildDemoZoneLines(tplJsonEscape(wp), tplJsonEscape(rw), tplJsonEscape(br), tplJsonEscape(ml)),
             tplJsonEscape(doc))
 
-        -- 讀舊 zones.json：逐行累加（供備份）＋偵測是否有非空白內容。
-        -- probe 同 writeZonesTemplate（0-byte／全空白視同缺檔 → 直接寫 zones.json、不備份）。
+        -- 進生成前先跑一次性 legacy 遷移（marker 閘，重入安全）——正常流程 server 啟動的
+        -- ensureZonesTemplate 已遷移完；此為 belt-and-suspenders，失敗即中止（同 writeZonesTemplate
+        -- 的遮蔽風險理由：不能在 legacy 未搬完前覆寫 zones.txt）。
+        if MinidoracatZonesShared.migrateLegacyZones() == false then
+            return { ok = false, wrotePath = nil, backedUp = false, bakName = nil }
+        end
+        -- 讀舊 zones.txt：逐行累加（供備份）＋偵測是否有非空白內容。
+        -- probe 同 writeZonesTemplate（0-byte／全空白視同缺檔 → 直接寫 zones.txt、不備份）。
         local sep = getFileSeparator()
-        local zonesPath = "MinidoracatMiniMapZones" .. sep .. "zones.json"
+        local zonesPath = MinidoracatZonesShared.zonesPath()
         local oldLines, hasContent, oldBytes = {}, false, 0
         local reader = getFileReader(zonesPath, false)
         if reader then
@@ -707,7 +881,7 @@ function MinidoracatZonesShared.generateTemplateForLanguage(langCode)
                 if line == nil then break end
                 oldBytes = oldBytes + utf8ByteLen(line) + 1  -- UTF-8 byte 估（非 code unit #）
                 -- 同 readRawZones 的 maxFileBytes 上限：外部工具寫出超大檔時不無界讀入
-                -- 記憶體；超限即中止（zones.json 不動、不備份不覆寫）
+                -- 記憶體；超限即中止（zones.txt 不動、不備份不覆寫）
                 if oldBytes > MinidoracatZonesShared.LIMITS.maxFileBytes then
                     reader:close()
                     return { ok = false, wrotePath = nil, backedUp = false, bakName = nil }
@@ -718,20 +892,20 @@ function MinidoracatZonesShared.generateTemplateForLanguage(langCode)
             reader:close()
         end
 
-        -- 有內容：先原樣備份到 zones.json.<時間戳>.bak，成功才覆寫。備份失敗 → 中止，zones.json 不動。
+        -- 有內容：先原樣備份到 zones.<時間戳>.bak.txt，成功才覆寫。備份失敗 → 中止，zones.txt 不動。
         local backedUp = false
         local bakName = nil
         if hasContent then
-            bakName = "zones.json." .. MinidoracatZonesShared.backupStamp() .. ".bak"
-            local bakPath = "MinidoracatMiniMapZones" .. sep .. bakName
+            bakName = "zones." .. MinidoracatZonesShared.backupStamp() .. ".bak.txt"
+            local bakPath = MinidoracatZonesShared.ZONES_DIR .. sep .. bakName
             local bakWriter = getFileWriter(bakPath, true, false)
             if not bakWriter then return { ok = false, wrotePath = nil, backedUp = false, bakName = nil } end
             local expected = table.concat(oldLines, "\n")
             bakWriter:write(expected)
             bakWriter:close()
-            -- 讀回驗證：PZ getFileWriter 包 java PrintWriter，IO 失敗被吞不拋（LuaManager.java:6659-6670/12735
-            -- 已反編譯證實）→ write/close 回來不代表資料真的落地。逐行讀回 bak concat("\n") 與寫入內容
-            -- 完全相等才算備份成功；讀不到／不相等 → 中止，zones.json 一位元組不動（絕不無備份覆寫）。
+            -- 讀回驗證：PZ getFileWriter 包 java PrintWriter，IO 失敗被吞不拋（42.20 反編譯
+            -- LuaManager.java:6736-6748/12816 已證實）→ write/close 回來不代表資料真的落地。逐行讀回 bak concat("\n") 與寫入內容
+            -- 完全相等才算備份成功；讀不到／不相等 → 中止，zones.txt 一位元組不動（絕不無備份覆寫）。
             local verifyReader = getFileReader(bakPath, false)
             if not verifyReader then return { ok = false, wrotePath = nil, backedUp = false, bakName = nil } end
             local backParts = {}
@@ -751,7 +925,7 @@ function MinidoracatZonesShared.generateTemplateForLanguage(langCode)
         if not writer then return { ok = false, wrotePath = nil, backedUp = false, bakName = nil } end
         writer:write(content)
         writer:close()
-        return { ok = true, wrotePath = "zones.json", backedUp = backedUp, bakName = bakName }
+        return { ok = true, wrotePath = MinidoracatZonesShared.ZONES_FILENAME, backedUp = backedUp, bakName = bakName }
     end)
     if not ok then return { ok = false, wrotePath = nil, backedUp = false } end
     return result
