@@ -1,8 +1,6 @@
 version=1
 id=3768276209
 title=Minidoracat MiniMap Zones for B42
-tags=Build 42;Interface;Map;Multiplayer
-visibility=public
 description=[h1]🗺️ Minidoracat MiniMap Zones[/h1]
 description=[h3]By Minidoracat[/h3]
 description=
@@ -61,3 +59,5 @@ description=[b]#map #minimap #worldmap #Minidoracat[/b]
 description=
 description=Workshop ID: 3768276209
 description=Mod ID: MinidoracatMiniMapZonesFor42
+tags=Build 42;Interface;Map;Multiplayer
+visibility=public

@@ -5,3 +5,9 @@
 *.ps1 text eol=lf
 *.bat text eol=lf
 *.md text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+mod.info text eol=lf
+
+# workshop.txt 例外：遊戲上傳會整檔回寫成 CRLF，跟著遊戲格式走以消除假差異（入庫仍 LF）
+MOD/*/workshop.txt text eol=crlf
