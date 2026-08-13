@@ -1,6 +1,6 @@
 {
     "UI_MinidoracatMiniMapZones_ServerZones": "サーバーゾーンを表示",
-    "UI_MinidoracatMiniMapZones_ServerZones_tooltip": "サーバーが zones.txt 経由で配信するカスタムゾーン（半透明の塗り＋枠線＋名称）を表示します。バニラマップの資源ポイント（POI）は本体 MOD に内蔵され、この addon には含まれません。",
+    "UI_MinidoracatMiniMapZones_ServerZones_tooltip": "サーバーが zones.json 経由で配信するカスタムゾーン（半透明の塗り＋枠線＋名称）を表示します。バニラマップの資源ポイント（POI）は本体 MOD に内蔵され、この addon には含まれません。",
     "UI_MinidoracatMiniMapZones_ReloadSent": "/reloadzones の再読み込み要求を送信しました…",
     "UI_MinidoracatMiniMapZones_ReloadResult": "ゾーンデータを再読み込みしました（%1 個のゾーン）",
     "UI_MinidoracatMiniMapZones_ReloadFailed": "ゾーンデータの再読み込みに失敗しました：%1",
@@ -10,15 +10,15 @@
     "UI_MinidoracatMiniMapZones_TplMultiRect": "デモゾーン：複数矩形の L 字（Riverside）",
     "UI_MinidoracatMiniMapZones_TplDoc": "ゾーンはマップ表示用のマーカーのみで、ゲームの動作には影響しません（この MOD に PVP／安全地帯などの機能はありません）。上記はデモゾーンです。自由に編集・削除できます。各ゾーンに \"enabled\": false を追加すると、削除せずに一時的に非表示にできます（省略時は true）。座標はワールドの square 座標 [x1,y1,x2,y2]（左上から右下）です。任意の言語で編集できます（ファイルは UTF-8 で読み込まれます）。変更はポーリング間隔の後、または管理者が /reloadzones を実行すると即座に反映され、再起動は不要です。",
     "UI_MinidoracatMiniMapZones_GenTemplate": "ゾーンテンプレートを生成",
-    "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "選択した言語で 4 つのデモゾーンを含む zones.txt テンプレートを生成し、直ちに適用します。zones.txt が空または存在しない場合は直接書き込みます。内容がある場合は、まず古いファイルをタイムスタンプ付きファイル（例：zones.20260101-120000.bak.txt。生成のたびに個別に保存され、上書きされません）にバックアップしてから上書きします。バックアップに失敗した場合、zones.txt は変更されません。サーバーでは「MOD 管理」権限が必要です。",
+    "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "選択した言語で 4 つのデモゾーンを含む zones.json テンプレートを生成し、直ちに適用します。zones.json が空または存在しない場合は直接書き込みます。内容がある場合は、まず古いファイルをタイムスタンプ付きファイル（例：zones.20260101-120000.bak.json。生成のたびに個別に保存され、上書きされません）にバックアップしてから上書きします。バックアップに失敗した場合、zones.json は変更されません。サーバーでは「MOD 管理」権限が必要です。",
     "UI_MinidoracatMiniMapZones_LangCurrent": "現在の言語に従う",
     "UI_MinidoracatMiniMapZones_LangCH": "繁體中文",
     "UI_MinidoracatMiniMapZones_LangCN": "简体中文",
     "UI_MinidoracatMiniMapZones_LangEN": "English",
     "UI_MinidoracatMiniMapZones_LangJP": "日本語",
-    "UI_MinidoracatMiniMapZones_GenConfirm": "「%1」で区域テンプレートを生成しますか？\\n現在の zones.txt はタイムスタンプ付き .bak.txt ファイルにバックアップしてから上書きします。",
+    "UI_MinidoracatMiniMapZones_GenConfirm": "「%1」で区域テンプレートを生成しますか？\\n現在の zones.json はタイムスタンプ付き .bak.json ファイルにバックアップしてから上書きします。",
     "UI_MinidoracatMiniMapZones_GenSent": "テンプレート生成リクエストを送信しました…",
     "UI_MinidoracatMiniMapZones_GenResult": "テンプレートを %1 に書き込みました",
-    "UI_MinidoracatMiniMapZones_GenResultBackup": "以前の zones.txt を %1 にバックアップし、テンプレートを書き込みました",
+    "UI_MinidoracatMiniMapZones_GenResultBackup": "以前の zones.json を %1 にバックアップし、テンプレートを書き込みました",
     "UI_MinidoracatMiniMapZones_GenFailed": "テンプレート生成に失敗しました：%1"
 }

@@ -61,7 +61,7 @@ local spLastPollMs = 0
 -- D1 分包重組上限（防惡意 tot 撐爆記憶體）。必須 ≥ server 最壞分包數：server 按
 -- 60000-byte wire 預算分包（enqueueFullSync），單 zone 上限＝單包預算 → 最壞每包
 -- 恰 1 個 zone → tot ≤ zone 數 ≤ maxZones。綁共用真值使不變式結構成立（舊值 64
--- 在全合規的重型 zones.txt 下會被超過 → 整批靜默丟棄，review 抓出）。記憶體上界
+-- 在全合規的重型 zones.json 下會被超過 → 整批靜默丟棄，review 抓出）。記憶體上界
 -- 不變：已組裝 zone 總數仍由 handleZoneData 的 batch.total>maxZones 閘封頂。
 local MAX_BATCH_PACKETS = (MinidoracatZonesShared and MinidoracatZonesShared.LIMITS
     and MinidoracatZonesShared.LIMITS.maxZones) or 500
@@ -190,7 +190,7 @@ local function handleReloadResult(args)
 end
 
 -- 生成範本結果回饋（沿 reloadResult 顯示路徑：console log ＋玩家浮字）。三態：失敗（GenFailed）／
--- 已備份舊 zones.txt 後寫入（GenResultBackup，帶 .bak 檔名）／直接寫入無備份（GenResult）。
+-- 已備份舊 zones.json 後寫入（GenResultBackup，帶 .bak 檔名）／直接寫入無備份（GenResult）。
 local function handleGenerateResult(args)
     local ok = args.ok
     if ok == nil then ok = true end
@@ -198,9 +198,9 @@ local function handleGenerateResult(args)
     if not ok then
         text = getText("UI_MinidoracatMiniMapZones_GenFailed", tostring(args.path or "?"))
     elseif args.backedUp then
-        -- bakName＝時間戳備份檔名（zones.<YYYYMMDD-HHMMSS>.bak.txt，0.2.0 起；舊 server 無此欄位時退舊格式）
+        -- bakName＝時間戳備份檔名（zones.<YYYYMMDD-HHMMSS>.bak.json，0.3.0 起；舊 server 無此欄位時退舊格式）
         text = getText("UI_MinidoracatMiniMapZones_GenResultBackup",
-            tostring(args.bakName or (tostring(args.path or "zones.txt") .. ".bak")))
+            tostring(args.bakName or (tostring(args.path or "zones.json") .. ".bak")))
     else
         text = getText("UI_MinidoracatMiniMapZones_GenResult", tostring(args.path or "?"))
     end
@@ -220,12 +220,12 @@ end
 --   廣播永遠到不了 Lua——OnServerCommand 在 SP 不會為此觸發，只能本地讀檔。
 -- 讀檔路徑／1MB 早退／變化偵測邏輯照抄主 MOD server 檔
 -- MinidoracatMiniMapZonesServer.lua 的 readRawZones/pollNow（getFileReader 出處
--- LuaManager.java:5919-5950（42.20，無副檔名白名單），root＝Zomboid/Lua/，兩端同一路徑
+-- LuaManager.java:5919-5950（無副檔名白名單），root＝Zomboid/Lua/，兩端同一路徑
 -- ＝MinidoracatZonesShared.zonesPath()）；hash 用共用的
 -- MinidoracatZonesShared.djb2（server 檔已改呼叫同一函式，見該檔沿用註解）。
 --------------------------------------------------------------------------------
 
--- 讀 zones.txt 原始字串；三態同 server 端：nil=不存在(合法空集)、false=超過上限、string=內容
+-- 讀 zones.json 原始字串；三態同 server 端：nil=不存在(合法空集)、false=超過上限、string=內容
 local function spReadRawZones()
     local path = MinidoracatZonesShared.zonesPath()
     local reader = getFileReader(path, false)
@@ -258,11 +258,11 @@ local function spPollNow(force)
     if raw == false then
         -- C3：log-once，避免每輪重複刷 console（檔案修好後 spReadRawZones 回非 false 才復位旗標）
         if not spOversizeReported then
-            log("zones.txt exceeds " .. MinidoracatZonesShared.LIMITS.maxFileBytes
+            log("zones.json exceeds " .. MinidoracatZonesShared.LIMITS.maxFileBytes
                 .. " bytes limit (SP fallback), load aborted (same state not logged again)")
             spOversizeReported = true
         end
-        return { ok = false, count = #serverZones, errors = { "zones.txt exceeds size limit" } }
+        return { ok = false, count = #serverZones, errors = { "zones.json exceeds size limit" } }
     end
     spOversizeReported = false
     if raw == nil then
@@ -270,10 +270,10 @@ local function spPollNow(force)
         -- 每輪只嘗試一次；成功記一條、失敗 log-once（不重試刷屏）。
         if MinidoracatZonesShared.ensureZonesTemplateEmpty() then
             spMissingRegenFailReported = false
-            log("zones.txt missing at runtime (SP fallback), regenerated empty template (zones cleared)")
+            log("zones.json missing at runtime (SP fallback), regenerated empty template (zones cleared)")
         elseif not spMissingRegenFailReported then
             spMissingRegenFailReported = true
-            log("zones.txt missing and empty-template regen failed (SP fallback; getFileWriter unavailable?), continuing with empty set")
+            log("zones.json missing and empty-template regen failed (SP fallback; getFileWriter unavailable?), continuing with empty set")
         end
         raw = ""
     end
@@ -296,14 +296,14 @@ local function spPollNow(force)
     else
         local okDecode, decoded = pcall(MinidoracatZonesJson.decode, raw)
         if not okDecode then
-            log("zones.txt parse failed (SP fallback), keeping previous cache: " .. tostring(decoded))
+            log("zones.json parse failed (SP fallback), keeping previous cache: " .. tostring(decoded))
             return { ok = false, count = #serverZones, errors = { tostring(decoded) } }
         end
         local result = MinidoracatZonesShared.validateZones(decoded)
         -- fatal（整檔壞：頂層非 table／zones 非陣列）→ 保留前一份快取，不清空。hash 已於上方記錄，
         -- 同壞檔下輪不再重 log（force 重讀時仍走此判斷、同樣保留快取）。
         if result.fatal then
-            log("zones.txt invalid (SP fallback, " .. tostring(result.errors[1]) .. "), keeping previous cache")
+            log("zones.json invalid (SP fallback, " .. tostring(result.errors[1]) .. "), keeping previous cache")
             return { ok = false, count = #serverZones, errors = result.errors }
         end
         zones, errors = result.zones, result.errors
@@ -324,7 +324,7 @@ end
 
 -- 主 MOD 設定頁「生成範例檔」按鈕呼叫此全域（見下方 registerZoneAction 註冊）。
 -- langCode: "current"/nil＝跟隨當前語系；"CH"/"CN"/"EN"/"JP"＝指定語系。
---   SP：直接本地生成（檔在本機），寫的是 zones.txt 時順帶本地強制重讀讓區域立即更新；
+--   SP：直接本地生成（檔在本機），寫的是 zones.json 時順帶本地強制重讀讓區域立即更新；
 --   MP：發 generateTemplate client command（伺服器權威，capability 驗證＋生成＋必要時 pollNow 廣播，
 --        結果由 server 回 generateResult）。回饋沿 reloadResult 顯示路徑。
 function MinidoracatZonesClient_GenerateTemplate(langCode)
@@ -514,20 +514,20 @@ Events.OnGameStart.Add(function()
         -- 改為本地首次讀取＋掛本地輪詢節奏。
         spPollIntervalSeconds = spGetPollInterval()
         spLastPollMs = getTimestampMs()
-        -- 42.19→42.20 一次性 legacy 遷移的可見性 log（遷移本體在 ensureZonesTemplate 內
+        -- 0.2.0→0.3.0 一次性 legacy 遷移的可見性 log（遷移本體在 ensureZonesTemplate 內
         -- 也會跑，session 快取使真實 IO 只執行一次；與 server 端 log 對稱）
         local okMig, mig = pcall(MinidoracatZonesShared.migrateLegacyZones)
         if okMig and mig == "migrated" then
-            log("legacy zones.json migrated to zones.txt (one-time; 42.20 file-extension whitelist)")
+            log("legacy zones.txt migrated to zones.json (one-time; 42.20.1 re-allowed the .json extension)")
         elseif okMig and mig == false then
-            log("legacy zones.json migration FAILED (oversize/IO/verify), will retry next launch")
+            log("legacy zones.txt migration FAILED (oversize/IO/verify), will retry next launch")
         elseif not okMig then
             log("legacy migration raised: " .. tostring(mig))
         end
-        -- 首次進世界：zones.txt 不存在時寫一份含四個示範區域的範本（見 shared ensureZonesTemplate）
+        -- 首次進世界：zones.json 不存在時寫一份含四個示範區域的範本（見 shared ensureZonesTemplate）
         -- ——SP 進世界就看得到／照著改；失敗僅 log 一條照常讀現況。MP client 絕不呼叫（伺服器權威）。
         if not MinidoracatZonesShared.ensureZonesTemplate() then
-            log("zones.txt template creation failed (getFileWriter unavailable?), reading current state as-is")
+            log("zones.json template creation failed (getFileWriter unavailable?), reading current state as-is")
         end
         spPollNow(true)
         log("SP fallback active, local poll interval " .. spPollIntervalSeconds .. "s")

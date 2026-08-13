@@ -1,8 +1,8 @@
--- MinidoracatMiniMapZonesServer.lua — 伺服器權威資料層（讀 zones.txt → 驗證 → 分包廣播）
+-- MinidoracatMiniMapZonesServer.lua — 伺服器權威資料層（讀 zones.json → 驗證 → 分包廣播）
 --
--- 職責：讀 Zomboid/Lua/MinidoracatMiniMapZones/zones.txt（內容為 JSON 格式；外部程式
--- 可寫＝信任邊界。42.19 legacy zones.json 由 shared migrateLegacyZones 一次性遷移，
--- 檔名契約與白名單根因見 shared 檔頭）、逐輪輪詢偵測變化、驗證後快取、對客戶端全量
+-- 職責：讀 Zomboid/Lua/MinidoracatMiniMapZones/zones.json（內容為 JSON 格式；外部程式
+-- 可寫＝信任邊界。0.2.0 legacy zones.txt 由 shared migrateLegacyZones 一次性遷移，
+-- 檔名契約與白名單沿革見 shared 檔頭）、逐輪輪詢偵測變化、驗證後快取、對客戶端全量
 -- 分包廣播；admin `/reloadzones` 強制重讀。
 -- 繪製、開關 UI、provider 註冊全在主 MOD／本包 client——本檔只碰檔案 IO＋網路。
 --
@@ -11,7 +11,7 @@
 --
 -- 引擎 API 出處（AGENTS.md 鐵則：禁憑記憶寫 PZ API；行號為 42.20 反編譯）：
 --   getFileReader(filename, createIfNull) → LuaManager.java:5919-5950
---     · **無副檔名白名單**（42.20 白名單只加在 getFileWriter）——legacy zones.json
+--     · **無副檔名白名單**（白名單只加在 getFileWriter）——legacy zones.txt
 --       仍可讀，一次性遷移路徑因此成立
 --     · root = getLuaCacheDir()（Zomboid/Lua/）；filename 內 `/` 與 `\` 皆被 normalize 成
 --       File.separator——所以 separator 其實引擎會統一，但仍照 AGENTS.md 鐵則
@@ -93,7 +93,7 @@ local function getPollInterval()
     return v
 end
 
--- 讀 zones.txt 原始字串。回傳值三態：
+-- 讀 zones.json 原始字串。回傳值三態：
 --   string → 檔案內容（可能 ""）；nil → 檔不存在（合法空集）；false → 超過 1MB（放棄本輪）
 -- 邊讀邊累加長度、超 maxFileBytes 立即放棄（防外部無界輸入把整檔灌進記憶體）。
 local function readRawZones()
@@ -209,11 +209,11 @@ local function pollNow(force)
         -- 超大檔：放棄本輪、不動快取/hash（外部修檔後長度變→下輪自然重試）。
         -- C3：log-once，避免每輪重複刷 console（檔案修好後 readRawZones 回非 false 才復位旗標）
         if not oversizeReported then
-            log("zones.txt exceeds " .. MinidoracatZonesShared.LIMITS.maxFileBytes
+            log("zones.json exceeds " .. MinidoracatZonesShared.LIMITS.maxFileBytes
                 .. " bytes limit, load aborted (same state not logged again)")
             oversizeReported = true
         end
-        return { ok = false, count = zoneCacheCount, errors = { "zones.txt exceeds size limit" } }
+        return { ok = false, count = zoneCacheCount, errors = { "zones.json exceeds size limit" } }
     end
     oversizeReported = false
     if raw == nil then
@@ -221,10 +221,10 @@ local function pollNow(force)
         -- 每輪只嘗試一次；成功記一條、失敗 log-once（不重試刷屏）。pcall 已在 ensureZonesTemplateEmpty 內。
         if MinidoracatZonesShared.ensureZonesTemplateEmpty() then
             missingRegenFailReported = false
-            log("zones.txt missing at runtime, regenerated empty template (zones cleared)")
+            log("zones.json missing at runtime, regenerated empty template (zones cleared)")
         elseif not missingRegenFailReported then
             missingRegenFailReported = true
-            log("zones.txt missing and empty-template regen failed (getFileWriter unavailable?), continuing with empty set")
+            log("zones.json missing and empty-template regen failed (getFileWriter unavailable?), continuing with empty set")
         end
         raw = ""  -- 以空內容續行（清空區域）
     end
@@ -249,14 +249,14 @@ local function pollNow(force)
     else
         local okDecode, decoded = pcall(MinidoracatZonesJson.decode, raw)
         if not okDecode then
-            log("zones.txt parse failed, keeping previous cache: " .. tostring(decoded))
+            log("zones.json parse failed, keeping previous cache: " .. tostring(decoded))
             return { ok = false, count = zoneCacheCount, errors = { tostring(decoded) } }
         end
         local result = MinidoracatZonesShared.validateZones(decoded)
         -- fatal（整檔壞：頂層非 table／zones 非陣列）→ 保留前一份快取，不清空不廣播。hash 已於上方
         -- 記錄，同壞檔下輪不再重 log（force 重讀時仍會走此判斷、同樣保留快取）。
         if result.fatal then
-            log("zones.txt invalid (" .. tostring(result.errors[1]) .. "), keeping previous cache")
+            log("zones.json invalid (" .. tostring(result.errors[1]) .. "), keeping previous cache")
             return { ok = false, count = zoneCacheCount, errors = result.errors }
         end
         zones, errors = result.zones, result.errors
@@ -270,7 +270,7 @@ local function pollNow(force)
         log(errors[i])
     end
     -- 載入摘要：enabled:false 的 zone 計入 disabledCount，>0 時才顯示 disabled 段（Y=0 省略維持簡潔）。
-    local summary = "zones.txt loaded " .. zoneCacheCount .. " zone(s) ("
+    local summary = "zones.json loaded " .. zoneCacheCount .. " zone(s) ("
     if disabledCount > 0 then
         summary = summary .. disabledCount .. " disabled, "
     end
@@ -340,20 +340,20 @@ Events.OnServerStarted.Add(function()
     -- Task 3：範本生成前先修正原版 init 排序 quirk，讓刪檔重生的範本用正確語系（繁中）而非
     -- 被卡死的 EN fallback（見上方 resyncTranslatorLanguage 註解與反編譯佐證）。
     resyncTranslatorLanguage()
-    -- 42.19→42.20 一次性 legacy 遷移的可見性 log（遷移本體在 writeZonesTemplate 內也會跑，
+    -- 0.2.0→0.3.0 一次性 legacy 遷移的可見性 log（遷移本體在 writeZonesTemplate 內也會跑，
     -- marker 閘重入安全——此處先跑一次純為 admin 可見的記錄）
     local okMig, mig = pcall(MinidoracatZonesShared.migrateLegacyZones)
     if okMig and mig == "migrated" then
-        log("legacy zones.json migrated to zones.txt (one-time; 42.20 file-extension whitelist)")
+        log("legacy zones.txt migrated to zones.json (one-time; 42.20.1 re-allowed the .json extension)")
     elseif okMig and mig == false then
-        log("legacy zones.json migration FAILED (oversize/IO/verify), zones.txt untouched or reset to blank; will retry next start")
+        log("legacy zones.txt migration FAILED (oversize/IO/verify), zones.json untouched or reset to blank; will retry next start")
     elseif not okMig then
         log("legacy migration raised: " .. tostring(mig))
     end
-    -- 首次啟動：zones.txt 不存在時寫一份含四個示範區域的範本（見 shared ensureZonesTemplate），
+    -- 首次啟動：zones.json 不存在時寫一份含四個示範區域的範本（見 shared ensureZonesTemplate），
     -- 讓伺服器一開就有東西可看／照著改；失敗（getFileWriter 不可用等）僅 log 一條照常暖讀
     if not MinidoracatZonesShared.ensureZonesTemplate() then
-        log("zones.txt template creation failed (getFileWriter unavailable?), loading current state as-is")
+        log("zones.json template creation failed (getFileWriter unavailable?), loading current state as-is")
     end
     pollNow(true)  -- 強制首讀（此時尚無 client，廣播為 no-op，僅暖快取）
     Events.OnTick.Add(onTick)  -- C2：輪詢改由 OnTick wall-clock 計時，不再掛 EveryOneMinute
@@ -401,8 +401,8 @@ Events.OnClientCommand.Add(function(module, command, player, args)
         local lang = type(args) == "table" and args.lang or nil
         if lang ~= nil and type(lang) ~= "string" then lang = nil end
         local gen = MinidoracatZonesShared.generateTemplateForLanguage(lang)
-        -- 新語意一律寫 zones.txt（有內容先備份 .bak）；成功即強制重讀＋全體廣播讓所有 client
-        -- 立即看到新示範區域。備份失敗會回 ok=false（zones.txt 未動），此時不廣播。
+        -- 新語意一律寫 zones.json（有內容先備份 .bak）；成功即強制重讀＋全體廣播讓所有 client
+        -- 立即看到新示範區域。備份失敗會回 ok=false（zones.json 未動），此時不廣播。
         if gen.ok then
             pollNow(true)
         end

@@ -25,7 +25,7 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 --
--- 本檔為 Minidoracat MiniMap Zones 客製裁切版：只保留 decode。伺服器讀 zones.txt
+-- 本檔為 Minidoracat MiniMap Zones 客製裁切版：只保留 decode。伺服器讀 zones.json
 -- 只需要解析、不需要序列化輸出，且 Kahlua 沒有曝露全域 next（原版 encode_table
 -- 用得到），砍掉 encode 半邊順便避開這個相容缺口（研究報告
 -- .omc/research/zones-mod-tech-research.md §3：decode 路徑逐函式對照 Kahlua stdlib，

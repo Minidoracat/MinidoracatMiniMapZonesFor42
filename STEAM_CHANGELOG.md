@@ -1,37 +1,20 @@
-[h1]Minidoracat MiniMap Zones 42.20.0-0.2.0[/h1]
-[i]2026-07-30[/i]
+[h1]Minidoracat MiniMap Zones 42.20.1-0.3.0[/h1]
+[i]2026-08-13[/i]
 
-[h3]🔧 修正[/h3]
+[h3]🔄 變更[/h3]
 [list]
-[*] [b]42.20 寫檔全滅修復——檔名遷移 zones.json → zones.txt[/b]：PZ 42.20 的
+[*] [b]區域檔改回 zones.json[/b]：0.2.0 之所以暫時改用 zones.txt，是因為遊戲 42.20.0 擋掉了 .json的寫入；42.20.1 已經把 .json 放行，所以檔名改回原本的 zones.json（內容格式從頭到尾都是 JSON，只有副檔名反覆過）。備份檔一併改為 zones.<時間戳>.bak.json。[b]外部程式請改寫 zones.json。[/b]
+[*] [b]需要遊戲 Build 42.20.1 以上[/b]：42.20.0 寫不出 .json，留在該版會重演 0.2.0 那次「寫檔全部靜默失效」的狀況，因此直接由遊戲擋下，而不是讓 MOD 裝上去之後才壞掉。
+[*] [b]0.2.0 的 zones.txt 會在首次啟動自動搬進 zones.json[/b]：一次性，搬完會記錄已處理。若 zones.json 原本就有內容，會先把它原樣備份成 zones.premigrate.bak.json 再覆寫。搬運或備份只要有任何一步失敗，就什麼都不動、下次啟動自動重試。搬運完成後刪掉 zones.json就是清空區域（執行期重生空範本、關服期間刪除則啟動時重生示範範本），[b]不會[/b]從殘留的 zones.txt 把舊資料復活。
 [/list]
-getFileWriter 新增副檔名白名單 {ini,cfg,txt,log}（42.20 反編譯
-LuaManager.java:2726/:6716），不合白名單[b]靜默回 null[/b]——0.1.0 的三個寫檔點
-（範本自動生成、時間戳備份、設定頁生成按鈕）全部失效（讀取不受影響）。
-0.2.0 起正典檔改為 zones.txt（[b]內容仍為 JSON 格式[/b]）；備份檔改為
-zones.<時間戳>.bak.txt。外部程式請改寫 zones.txt。
+
+[h3]• 已知行為（刻意設計）[/h3]
 [list]
-[*] [b]42.19 舊檔一次性自動遷移[/b]：首次啟動時若有內容的 zones.json 存在且
+[*] 本包[b]不會[/b]去猜既有的 zones.json 是不是 42.19 時代的舊檔而清掉它——那種推論會誤刪真實資料。代價：如果你在 0.2.0 期間刪掉 zones.txt 來清空區域、機器上又還留著更早的 zones.json，升級後會看到舊區域重新出現。[b]直接編輯或清空 zones.json 即可[/b]，不會有任何資料遺失。
+[*] 萬一自動搬運失敗，伺服器／單機仍會照常讀取現有的 zones.json（可能顯示到舊區域）。這是刻意的——一併擋掉會連「其實已經搬好、只差記錄」與「檔案完全正常但寫入功能壞了」一起遮蔽，代價更大。console 會有明確的 FAILED 訊息，下次啟動自動重試。
 [/list]
-zones.txt 尚未建立，原樣搬入 zones.txt（寫後讀回驗證），並寫 marker
-（MinidoracatMiniMapZones/legacyMigratedV1.txt）記錄已處置。marker 之後
-執行期刪 zones.txt＝清空（重生空範本）、關服期間刪除＝啟動重生示範範本
-（同 0.1.0 語意），兩者[b]絕不[/b]從殘留舊檔復活資料
-（Lua 無法刪除 legacy 檔，靠 marker 判定；比照主 MOD keyMigratedV1 先例）。
-遷移失敗（超 1MB／IO／驗證不符／marker 寫不出）不寫 marker、中止範本寫入，
-下次啟動重試；讀回驗證不符時將半寫的 zones.txt truncate 清空（防後續啟動把
-壞檔追認成正典、永久遮蔽 legacy）；結果做 session 快取（oversize 舊檔不會被
-輪詢每輪重掃 1MB）；server 與 SP 端 console 皆有可見 log。
 
 [h3]• 內部[/h3]
 [list]
-[*] [b]測試 stub 模擬 42.20 白名單（回歸鎖）[/b]：0.1.0 離線測試 60/60 全綠卻測不到
+[*] [b]異常情境全面硬化[/b]：三個寫檔入口（自動搬運／範本生成／設定頁生成按鈕）統一為「臨寫前重讀比對 → 寫入 → 讀回驗證」，並新增大量故障注入測試，涵蓋磁碟寫入失敗、檔案讀不到、清理動作本身失敗、以及外部程式在寫入空檔期改檔等異常情境。
 [/list]
-實機寫檔全滅——stub 的 getFileWriter 無條件回 writer。重構為 path-aware stub
-並模擬副檔名白名單（不合回 nil），任何寫檔路徑回歸到非白名單副檔名都會在
-離線階段被抓（白名單模擬與引擎同為[b]大小寫敏感[/b]）；新增 13 個遷移測試
-（原樣搬入／marker 防復活／txt 優先／超限中止重試／白名單回歸鎖／尾端空行
-冪等／marker 失敗不追認／讀回不符 truncate 後重試／生成閘先遷移／session
-快取防重掃／不可讀 legacy 區分（cacheFileExists）／verify 例外收斂／生成
-遇遷移失敗中止），73/73 通過。獨立雙 lane review（Claude/codex review-plus
-各一輪）發現的 3 Blocking＋6 Important 全數修復或列為已記錄取捨後綠燈。

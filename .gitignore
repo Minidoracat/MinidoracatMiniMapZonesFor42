@@ -10,6 +10,10 @@ AGENTS.md
 .code-review-graph/
 .gitnexus/
 
+# Python（scripts/ 下的驗證與產生器腳本）
+__pycache__/
+*.pyc
+
 # 系統檔案
 .DS_Store
 Thumbs.db

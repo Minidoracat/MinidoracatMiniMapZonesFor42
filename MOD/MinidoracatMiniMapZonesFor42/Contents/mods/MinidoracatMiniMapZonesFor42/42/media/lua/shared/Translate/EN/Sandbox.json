@@ -1,5 +1,5 @@
 {
     "Sandbox_MinidoracatMiniMapZones": "Minidoracat MiniMap Zones",
     "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds": "Zone data poll interval (seconds)",
-    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds_tooltip": "How often the server re-reads zones.txt and checks for changes (no broadcast if the content is unchanged). Lower values update faster but add server IO load. Admins can also force an immediate refresh with /reloadzones, independent of this interval."
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds_tooltip": "How often the server re-reads zones.json and checks for changes (no broadcast if the content is unchanged). Lower values update faster but add server IO load. Admins can also force an immediate refresh with /reloadzones, independent of this interval."
 }

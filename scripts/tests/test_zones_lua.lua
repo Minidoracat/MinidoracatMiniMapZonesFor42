@@ -318,23 +318,27 @@ end)
 
 -------------------------------------------------------------------------------
 -- 共用 path-aware IO stub 建構器（Section A2/A3 共用）。
--- 0.2.0 關鍵升級：getFileWriter stub **模擬 42.20 副檔名白名單** {ini,cfg,txt,log}——
+-- getFileWriter stub **模擬引擎副檔名白名單**（0.3.0＝42.20.1+ 的 {ini,cfg,txt,log,json}）——
 -- 不合白名單回 nil（同引擎靜默行為）。0.1.0 的 stub 無條件回 writer，正是「測試全綠、
--- 42.20 實機寫檔全滅」測不到的根因；此後任何寫檔路徑回歸到非白名單副檔名都會在離線階段炸。
+-- 42.20.0 實機寫檔全滅」測不到的根因；此後任何寫檔路徑回歸到非白名單副檔名都會在離線階段炸。
 --
 -- files：path→內容表（getFileReader 依 path 回讀；writer close 後落地回 files，供讀回驗證）。
 -- 預設 seed marker（migration no-op）；遷移專屬測試傳 opts.noMarker=true＋opts.legacy 自行布置。
--- readerContent＝zones.txt 初始內容（nil=不存在）。bakFails=true → 對 *.bak.txt 的 getFileWriter
--- 回 nil（模擬 IO 層備份失敗）。bakCorrupt=true → .bak.txt 落地內容與寫入不符（模擬 PZ
+-- readerContent＝正典 zones.json 初始內容（nil=不存在）。opts.legacy＝legacy zones.txt 內容；
+-- opts.markerV1=true 額外 seed 0.2.0 的 V1 marker。bakFails=true → 對 *.bak.json 的 getFileWriter
+-- 回 nil（模擬 IO 層備份失敗）。bakCorrupt=true → .bak.json 落地內容與寫入不符（模擬 PZ
 -- PrintWriter 吞 IO），使 fix3b 讀回驗證失敗。writes 只記「成功取得 writer」的寫入（path/parts）。
 -------------------------------------------------------------------------------
-local P_TXT = "MinidoracatMiniMapZones/zones.txt"
-local P_JSON = "MinidoracatMiniMapZones/zones.json"
-local P_MARKER = "MinidoracatMiniMapZones/legacyMigratedV1.txt"
+local P_CANON = "MinidoracatMiniMapZones/zones.json"      -- 0.3.0 正典
+local P_LEGACY = "MinidoracatMiniMapZones/zones.txt"      -- 0.2.0 legacy（只讀）
+local P_MARKER = "MinidoracatMiniMapZones/migratedToJsonV2.txt"
+local P_MARKER_V1 = "MinidoracatMiniMapZones/legacyMigratedV1.txt"  -- 0.2.0 寫的，本版刻意不讀
+local P_PREBAK = "MinidoracatMiniMapZones/zones.premigrate.bak.json"
 
--- 引擎等價：ZomboidFileSystem.getFileExtension 不做 lower-case → 白名單**大小寫敏感**
--- （.TXT 實機會被拒），stub 不得 string.lower。
-local WRITE_WHITELIST = { ini = true, cfg = true, txt = true, log = true }
+-- 引擎等價：ZomboidFileSystem.getFileExtension 取最後一個點之後、且不做 lower-case →
+-- 白名單**大小寫敏感**（.TXT/.JSON 實機會被拒），stub 不得 string.lower。
+-- 42.20.1 起 json 回到白名單（LuaManager.java:1034）；裸 .bak 仍不在其中。
+local WRITE_WHITELIST = { ini = true, cfg = true, txt = true, log = true, json = true }
 local function extAllowed(path)
     local ext = tostring(path):match("%.(%a+)$")
     return ext ~= nil and WRITE_WHITELIST[ext] == true
@@ -345,17 +349,31 @@ local function newGenHarness(readerContent, bakFails, bakCorrupt, opts)
     MinidoracatZonesShared._migrateSessionResult = nil  -- 重置遷移 session 快取（每 check 獨立）
     local state = { writes = {}, files = {}, reads = {}, opts = opts }
     if not opts.noMarker then state.files[P_MARKER] = "handled" end
-    if opts.legacy ~= nil then state.files[P_JSON] = opts.legacy end
-    if readerContent ~= nil then state.files[P_TXT] = readerContent end
+    if opts.markerV1 then state.files[P_MARKER_V1] = "handled" end
+    if opts.legacy ~= nil then state.files[P_LEGACY] = opts.legacy end
+    if readerContent ~= nil then state.files[P_CANON] = readerContent end
     _G.getFileSeparator = function() return "/" end
     _G.cacheFileExists = function(path)
-        if state.opts.legacyUnreadable and path == P_JSON then return true end
+        if state.opts.cacheExistsThrows then error("cacheFileExists boom") end
+        if state.opts.legacyUnreadable and path == P_LEGACY then return true end
         return state.files[path] ~= nil
     end
     _G.getFileReader = function(path, _)
         state.reads[path] = (state.reads[path] or 0) + 1
-        if state.opts.legacyUnreadable and path == P_JSON then return nil end  -- 存在但開檔失敗
-        if state.opts.verifyThrows and path == P_TXT and state.files[path] ~= nil then
+        if state.opts.legacyUnreadable and path == P_LEGACY then return nil end  -- 存在但開檔失敗
+        if state.opts.markerUnreadable and path == P_MARKER then return nil end  -- marker 存在但開檔失敗
+        if state.opts.canonUnreadable and path == P_CANON then return nil end    -- 正典存在但開檔失敗
+        if state.opts.canonAppearsUnreadable and path == P_CANON then
+            -- 首次 probe：確定不存在（files 無此鍵）。之後外部建立了檔案，但 reader 暫時
+            -- 打不開 → 同樣回 nil。用來驗證「兩次 nil 不等於狀態沒變」。
+            state.canonProbes = (state.canonProbes or 0) + 1
+            if state.canonProbes >= 2 then
+                state.files[P_CANON] = state.opts.canonAppearsUnreadable
+                return nil
+            end
+            return nil
+        end
+        if state.opts.verifyThrows and path == P_CANON and state.files[path] ~= nil then
             return { readLine = function() error("io boom") end, close = function() end }
         end
         local content = state.files[path]
@@ -370,25 +388,52 @@ local function newGenHarness(readerContent, bakFails, bakCorrupt, opts)
                 else line = content:sub(pos); pos = #content + 1 end
                 return line
             end,
-            close = function() end,
+            close = function()
+                -- TOCTOU 模擬：讀完正典檔後，外部工具寫入新內容（只發生一次）。
+                -- 遷移在「讀 existing」與「臨寫前重讀」之間若不比對，就會把它 truncate 掉。
+                if state.opts.mutateCanonAfterRead and path == P_CANON then
+                    -- mutateAfterNthRead：預設 1（讀完第一次就注入）。生成按鈕流程在寫入前
+                    -- 會多讀一次（備份來源），故該測試指定較後的次數。
+                    state.canonReads = (state.canonReads or 0) + 1
+                    if state.canonReads >= (state.opts.mutateAfterNthRead or 1) then
+                        state.files[P_CANON] = state.opts.mutateCanonAfterRead
+                        state.opts.mutateCanonAfterRead = nil
+                    end
+                end
+            end,
         }
     end
     _G.getFileWriter = function(path, createIfNull, append)
         assert(createIfNull == true and append == false, "getFileWriter 參數應為 (path,true,false)")
-        if not extAllowed(path) then return nil end  -- 42.20 副檔名白名單模擬（核心回歸鎖）
-        if bakFails and path:find("%.bak%.txt$") then return nil end  -- 模擬備份 getFileWriter 失敗
+        if not extAllowed(path) then return nil end  -- 副檔名白名單模擬（核心回歸鎖）
+        if bakFails and path:find("%.bak%.json$") then return nil end  -- 模擬備份 getFileWriter 失敗
+        if state.opts.preBakFails and path == P_PREBAK then return nil end  -- 模擬遷移前備份失敗
+        if state.opts.truncateFails and #tostring(path) > 0 and state.opts.truncateTarget == path
+            and state.opts.truncateArmed then
+            -- 只讓「清空」那一次取不到 writer（清不乾淨），非空寫入照常
+            state.opts.truncateArmed = false
+            return nil
+        end
+        if state.opts.canonWriterFailsOnce and path == P_CANON then
+            -- 暫時性 getFileWriter 失敗（FileOutputStream IOException）：只失敗第一次，
+            -- 之後可成功——用來驗證「沒開成就別去 truncate」（否則 truncate 會成功並清掉原檔）
+            state.opts.canonWriterFailsOnce = false
+            return nil
+        end
         if state.opts.markerFails and path == P_MARKER then return nil end  -- 模擬 marker 寫入失敗
         local rec = { path = path, parts = {} }
         state.writes[#state.writes + 1] = rec
         return {
             write = function(_, s) rec.parts[#rec.parts + 1] = s end,
             close = function()
-                -- 落地到可讀檔案表（供讀回驗證）；bakCorrupt/txtCorrupt 落地不同內容模擬 PrintWriter 吞 IO
-                if bakCorrupt and path:find("%.bak%.txt$") then
+                -- 落地到可讀檔案表（供讀回驗證）；bakCorrupt/canonCorrupt 落地不同內容模擬 PrintWriter 吞 IO
+                if state.opts.preBakPartial and path == P_PREBAK and #table.concat(rec.parts, "") > 0 then
+                    state.files[path] = "PARTIAL-BACKUP"  -- 非空但與寫入內容不符 → 讀回驗證失敗
+                elseif bakCorrupt and path:find("%.bak%.json$") then
                     state.files[path] = "CORRUPTED-BAK-DIFFERENT-FROM-EXPECTED"
-                elseif state.opts.txtCorrupt and path == P_TXT and #table.concat(rec.parts, "") > 0 then
+                elseif state.opts.canonCorrupt and path == P_CANON and #table.concat(rec.parts, "") > 0 then
                     -- 只污染非空寫入（空寫入＝truncate 清空，模擬其成功落地）
-                    state.files[path] = "CORRUPTED-TXT-TRUNCATED"
+                    state.files[path] = "CORRUPTED-CANON-TRUNCATED"
                 else
                     state.files[path] = table.concat(rec.parts, "")
                 end
@@ -445,11 +490,11 @@ end
 
 check("template(a): 檔缺→getTextOrNull 未載入時退 ASCII fallback，安全性＋數值契約鎖定", function()
     _G.getTextOrNull = nil  -- 無翻譯環境（server 翻譯未載入極端情況）→ tplText 退 ASCII 英文
-    local state = newGenHarness(nil)  -- zones.txt 不存在（marker 已 seed → 遷移 no-op）
+    local state = newGenHarness(nil)  -- zones.json 不存在（marker 已 seed → 遷移 no-op）
     local ret = MinidoracatZonesShared.ensureZonesTemplate()
     assert(ret == true, "寫入成功應回 true")
-    local w = writesTo(state, P_TXT)
-    assert(#w == 1, "zones.txt 應恰寫入一次，得到 " .. #w)
+    local w = writesTo(state, P_CANON)
+    assert(#w == 1, "zones.json 應恰寫入一次，得到 " .. #w)
     local raw = table.concat(w[1].parts, "")
 
     -- (1) 安全性：無 BOM、無原始控制字元、合法 UTF-8（ASCII fallback 全 ASCII，必然通過）
@@ -509,7 +554,7 @@ check("template(a2): getTextOrNull 回中文/特殊字元→UTF-8 原樣＋JSON 
     local state = newGenHarness(nil)
     local ret = MinidoracatZonesShared.ensureZonesTemplate()
     assert(ret == true, "寫入成功應回 true")
-    local raw = table.concat(writesTo(state, P_TXT)[1].parts, "")
+    local raw = table.concat(writesTo(state, P_CANON)[1].parts, "")
 
     -- 安全性仍成立：字串內的換行/引號/反斜線已被跳脫（無原始控制字元），中文為合法 UTF-8
     assertTemplateSafe(raw)
@@ -559,11 +604,11 @@ end)
 -- Task 1：執行期檔案消失 → ensureZonesTemplateEmpty 重生「空範本」
 check("template(empty): ensureZonesTemplateEmpty 寫空範本，decode 得 0 區域＋_doc", function()
     _G.getTextOrNull = nil
-    local state = newGenHarness(nil)  -- zones.txt 不存在
+    local state = newGenHarness(nil)  -- zones.json 不存在
     local ret = MinidoracatZonesShared.ensureZonesTemplateEmpty()
     assert(ret == true, "寫入成功應回 true")
-    local w = writesTo(state, P_TXT)
-    assert(#w == 1, "zones.txt 應恰寫入一次，得到 " .. #w)
+    local w = writesTo(state, P_CANON)
+    assert(#w == 1, "zones.json 應恰寫入一次，得到 " .. #w)
     local raw = table.concat(w[1].parts, "")
     assertTemplateSafe(raw)  -- 無 BOM、無原始控制字元、合法 UTF-8
     local decoded = MinidoracatZonesJson.decode(raw)
@@ -602,7 +647,21 @@ check("template(blank-probe): 0-byte／全空白既有檔 → probe 視同缺失
     -- 外部工具（VS Code 分頁存空緩衝）弄成 0-byte／全空白：檔「存在但空白」。
     -- 舊 probe 只看存在→永不補寫→卡死；新 probe 需讀到非空白字元才算存在。
     local blankLines, idx = { "", "   ", "\t" }, 0  -- 0-byte 行＋全空白行混合
+    -- landed＝已落地內容（nil＝仍是空白檔）。writeZonesTemplate 現在會寫後讀回驗證，
+    -- 故 stub 必須模擬「寫入後讀得回來」，否則驗證永遠失敗。
+    local landed = nil
     _G.getFileReader = function()
+        if landed ~= nil then
+            local pos = 1
+            return { readLine = function()
+                if pos > #landed then return nil end
+                local nl = landed:find("\n", pos, true)
+                local line
+                if nl then line = landed:sub(pos, nl - 1); pos = nl + 1
+                else line = landed:sub(pos); pos = #landed + 1 end
+                return line
+            end, close = function() end }
+        end
         idx = 0
         return { readLine = function() idx = idx + 1; return blankLines[idx] end, close = function() end }
     end
@@ -610,7 +669,8 @@ check("template(blank-probe): 0-byte／全空白既有檔 → probe 視同缺失
     _G.getFileWriter = function(_, createIfNull, append)
         writerCalls = writerCalls + 1
         assert(createIfNull == true and append == false, "getFileWriter 參數應為 (path,true,false)")
-        return { write = function(_, s) written[#written + 1] = s end, close = function() end }
+        return { write = function(_, s) written[#written + 1] = s end,
+                 close = function() landed = table.concat(written, "") end }
     end
     local ret = MinidoracatZonesShared.ensureZonesTemplate()
     assert(ret == true, "全空白既有檔應重寫範本並回 true")
@@ -624,7 +684,7 @@ end)
 -- Task 1：組字移到建檔之前 → 組字階段拋錯不留空檔（getFileWriter 0 次）。
 -- tplText 為 local 無法直接 stub；用 getTextOrNull 回非字串（number）逼 tplText 透傳、
 -- tplJsonEscape 對其取 #（length）於組字階段拋錯（#number 拋 "attempt to get length"）。
-check("template(assembly-fail): 組字失敗發生在建檔前，zones.txt 0 次寫入（不留空檔）", function()
+check("template(assembly-fail): 組字失敗發生在建檔前，zones.json 0 次寫入（不留空檔）", function()
     _G.getTextOrNull = function() return 42 end    -- 非字串 → tplJsonEscape #s 於組字階段拋錯
     local state = newGenHarness(nil)
     local ret = MinidoracatZonesShared.ensureZonesTemplateEmpty()
@@ -642,7 +702,7 @@ check("template(esc): 逐 byte 跳脫 \" \\ \\n \\r \\t，其餘控制字元丟�
     end
     local state = newGenHarness(nil)
     assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "寫入應成功")
-    local raw = table.concat(writesTo(state, P_TXT)[1].parts, "")
+    local raw = table.concat(writesTo(state, P_CANON)[1].parts, "")
     assertTemplateSafe(raw)  -- TAB 已跳脫、FF 已丟棄 → 無原始控制字元；中文合法 UTF-8
     local wp = MinidoracatZonesShared.validateZones(MinidoracatZonesJson.decode(raw)).zones[1]
     -- FF(0x0C) 被丟棄，其餘 round-trip 還原（\" → "、\\ → \、\t → TAB）
@@ -663,45 +723,447 @@ check("static(pattern-safe): MinidoracatZonesShared.lua 無數字轉義字元類
 end)
 
 -------------------------------------------------------------------------------
--- Section A2b: legacy 遷移（zones.json → zones.txt，42.20 副檔名白名單）
--- marker（legacyMigratedV1.txt）語意：一次性處置完成後，刪 zones.txt＝清空區域，
--- 絕不從殘留 legacy 復活舊資料。
+-- Section A2b: legacy 遷移（zones.txt → zones.json，0.3.0；42.20.1 起 json 回到白名單）
+-- marker（migratedToJsonV2.txt）語意：一次性處置完成後，刪 zones.json＝清空區域，
+-- 絕不從殘留 legacy 復活舊資料。順序契約：legacy zones.txt 有內容時**優先於**既存的
+-- zones.json（後者極可能是 42.19 時代的過期殘骸）。
 -------------------------------------------------------------------------------
 
-check("migrate(a): legacy 有內容＋無 marker＋無 zones.txt → 原樣搬入 zones.txt＋寫 marker", function()
+check("migrate(a): legacy 有內容＋無 marker＋無 zones.json → 原樣搬入 zones.json＋寫 marker", function()
     _G.getTextOrNull = nil
     local legacy = '{ "zones": [ { "name": "existing", "rects": [[1,2,3,4]] } ] }'
     local state = newGenHarness(nil, false, false, { noMarker = true, legacy = legacy })
     local ret = MinidoracatZonesShared.ensureZonesTemplate()
     assert(ret == true, "遷移成功應回 true")
-    local w = writesTo(state, P_TXT)
-    assert(#w == 1, "zones.txt 應恰寫一次（遷移內容，非示範範本），得到 " .. #w)
-    assert(table.concat(w[1].parts, "") == legacy, "zones.txt 內容應與 legacy 原樣相同")
+    local w = writesTo(state, P_CANON)
+    assert(#w == 1, "zones.json 應恰寫一次（遷移內容，非示範範本），得到 " .. #w)
+    assert(table.concat(w[1].parts, "") == legacy, "zones.json 內容應與 legacy 原樣相同")
     assert(state.files[P_MARKER] ~= nil, "遷移完成應寫 marker")
     -- 遷移後內容可被讀取端解析（round-trip）
-    local result = MinidoracatZonesShared.validateZones(MinidoracatZonesJson.decode(state.files[P_TXT]))
+    local result = MinidoracatZonesShared.validateZones(MinidoracatZonesJson.decode(state.files[P_CANON]))
     assert(result.count == 1, "遷移後應驗出 1 區域，得到 " .. result.count)
 end)
 
-check("migrate(b): marker 已在＋殘留 legacy＋zones.txt 消失 → 不復活舊資料，重寫示範範本", function()
+check("migrate(b): marker 已在＋殘留 legacy＋zones.json 消失 → 不復活舊資料，重寫示範範本", function()
     _G.getTextOrNull = nil
     local state = newGenHarness(nil, false, false, { legacy = '{ "zones": [ { "name": "stale" } ] }' })
     assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "應寫示範範本並回 true")
-    local raw = table.concat(writesTo(state, P_TXT)[1].parts, "")
+    local raw = table.concat(writesTo(state, P_CANON)[1].parts, "")
     local result = MinidoracatZonesShared.validateZones(MinidoracatZonesJson.decode(raw))
     assert(result.count == 4, "應寫 4 區域示範範本（非復活 stale legacy），得到 " .. result.count)
     assert(not raw:find("stale", 1, true), "範本不應含 legacy 舊資料")
 end)
 
-check("migrate(c): zones.txt 已有內容＋無 marker → txt 優先不動、只補 marker", function()
+check("migrate(c): 順序契約——legacy 有內容時覆寫既存 zones.json，且覆寫前先備份", function()
+    -- 0.2.0→0.3.0 升級者的典型磁碟狀態：zones.txt 是真實資料、zones.json 是 42.19 舊副本。
+    -- 若沿用 0.2.0「正典已有內容就早退」的順序，舊副本會被保留、使用者資料被丟棄。
     _G.getTextOrNull = nil
-    local txtContent = '{ "zones": [ { "name": "canonical", "rects": [[1,2,3,4]] } ] }'
-    local state = newGenHarness(txtContent, false, false,
-        { noMarker = true, legacy = '{ "zones": [ { "name": "old-json" } ] }' })
-    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "txt 已有內容應回 true")
-    assert(#writesTo(state, P_TXT) == 0, "zones.txt 已有內容不應被改寫")
-    assert(state.files[P_TXT] == txtContent, "zones.txt 內容應原樣")
+    local legacy = '{ "zones": [ { "name": "user-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(old4219, false, false, { noMarker = true, legacy = legacy })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "遷移成功應回 true")
+    assert(state.files[P_CANON] == legacy, "zones.json 應被 legacy 內容覆寫")
+    assert(state.files[P_PREBAK] == old4219,
+        "覆寫前應把舊 zones.json 原樣備份到 zones.premigrate.bak.json（絕不無備份覆蓋）")
+    assert(state.files[P_MARKER] ~= nil, "遷移完成應寫 marker")
+end)
+
+check("migrate(c-bak-fail): 覆寫前備份失敗 → 中止，zones.json 一位元組不動、不寫 marker", function()
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "user-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(old4219, false, false,
+        { noMarker = true, legacy = legacy, preBakFails = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "備份失敗應回 false")
+    assert(state.files[P_CANON] == old4219, "zones.json 不得被動到")
+    assert(state.files[P_MARKER] == nil, "備份失敗不應寫 marker（下次啟動重試）")
+end)
+
+check("migrate(c-oversize-canon): 既有 zones.json 超過 1MB（備份不了）→ 中止，不無備份覆寫", function()
+    -- 回歸鎖：`probeFileContent(p) == true and readFileCapped(p) or nil` 這種三態寫法會被
+    -- `or` 把 false（超限）吞成 nil，導致 oversize 的既有檔被當成「沒有內容」而無備份覆寫。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "user-data", "rects": [[1,2,3,4]] } ] }'
+    local huge = string.rep("x", MinidoracatZonesShared.LIMITS.maxFileBytes + 10)
+    local state = newGenHarness(huge, false, false, { noMarker = true, legacy = legacy })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "備份不了應回 false")
+    assert(state.files[P_CANON] == huge, "zones.json 不得被無備份覆寫")
+    assert(state.files[P_PREBAK] == nil, "不應留下半套備份")
+    assert(state.files[P_MARKER] == nil, "不應寫 marker（下次啟動重試）")
+end)
+
+check("migrate(c2): 42.19 直上 0.3.0（有 zones.json、無 legacy、無 V1 marker）→ 原封保留", function()
+    -- 這台機器從沒跑過 0.2.0，zones.json 就是使用者的有效資料，不得被清空或覆寫。
+    _G.getTextOrNull = nil
+    local userJson = '{ "zones": [ { "name": "from-4219", "rects": [[1,2,3,4]] } ] }'
+    local state = newGenHarness(userJson, false, false, { noMarker = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "應回 true")
+    assert(#writesTo(state, P_CANON) == 0, "既有 zones.json 不應被改寫")
+    assert(state.files[P_CANON] == userJson, "42.19 使用者資料應原封保留")
     assert(state.files[P_MARKER] ~= nil, "應補寫 marker")
+end)
+
+check("migrate(c3): 無 legacy 分支不做任何破壞性動作——既有 zones.json 原封不動", function()
+    -- 刻意不以 0.2.0 的 V1 marker 推論「這份 json 是過期殘骸」而清空它：V1 marker 有四種
+    -- 寫入情境，三種不代表磁碟上現在有過期的 json，據以刪除會誤刪真實資料。
+    -- （V1 marker 在場也一樣不動——本測試即該決策的回歸鎖。）
+    _G.getTextOrNull = nil
+    local existing = '{ "zones": [ { "name": "keep-me", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(existing, false, false, { noMarker = true, markerV1 = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "應回 true")
+    assert(state.files[P_CANON] == existing, "既有 zones.json 不得被清空或覆寫")
+    assert(#writesTo(state, P_CANON) == 0, "不應對 zones.json 有任何寫入")
+    assert(state.files[P_MARKER] ~= nil, "應寫 marker")
+end)
+
+check("migrate(c4): 無 legacy 分支 marker 寫失敗 → 容忍且無副作用，恢復後補寫成功", function()
+    -- 本分支不做破壞性動作，故 marker 失敗可容忍：下次啟動重入同分支、狀態完全相同。
+    -- （反例：若此分支會 truncate，marker 失敗就會讓下次啟動重複破壞——正是不做推論式刪除的理由。）
+    _G.getTextOrNull = nil
+    local existing = '{ "zones": [ { "name": "keep-me", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(existing, false, false, { noMarker = true, markerFails = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "marker 失敗仍應回 true（無破壞性動作）")
+    assert(state.files[P_CANON] == existing, "zones.json 不得被動到")
+    assert(state.files[P_MARKER] == nil, "marker 應寫不出")
+    -- 下次啟動（IO 恢復）：狀態完全相同，補寫 marker 成功
+    state.opts.markerFails = false
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "恢復後應回 true")
+    assert(state.files[P_CANON] == existing, "重入後 zones.json 仍不得被動到")
+    assert(state.files[P_MARKER] ~= nil, "marker 應被補寫")
+end)
+
+check("migrate(retry-bak-write-once): 重試不得覆寫 premigrate 備份（原檔收據不可被搬運結果蓋掉）", function()
+    -- 第一輪：備份 OLD → 搬入 LEGACY → marker 寫失敗（回 false）。
+    -- 第二輪：若無條件重寫備份，會把「已是 LEGACY」的 zones.json 當成原檔蓋掉 OLD，原始資料永久消失。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(old4219, false, false,
+        { noMarker = true, legacy = legacy, markerFails = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "marker 失敗應回 false")
+    assert(state.files[P_PREBAK] == old4219, "第一輪備份應為原檔 OLD")
+    assert(state.files[P_CANON] == legacy, "第一輪應已搬入 legacy")
+    -- 第二輪（marker IO 恢復）
+    state.opts.markerFails = false
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "第二輪應補 marker 成功")
+    assert(state.files[P_PREBAK] == old4219,
+        "premigrate 備份必須 write-once，不得被搬運結果覆寫，實得: " .. tostring(state.files[P_PREBAK]))
+    assert(state.files[P_MARKER] ~= nil, "第二輪應寫 marker")
+end)
+
+check("migrate(no-rollback): 搬運後 zones.json 被外部改過 → 不得用 legacy 蓋回去（資料回滾）", function()
+    -- 承上：第一輪搬運成功但 marker 失敗；該 session 期間外部程式把 zones.json 改成 C。
+    -- 第二輪若再讓 legacy 勝出，就是把 C 回滾掉。備份存在＝已搬運過一次，此時一律保持現狀。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local external = '{ "zones": [ { "name": "external-new", "rects": [[5,5,6,6]] } ] }'
+    local state = newGenHarness(old4219, false, false,
+        { noMarker = true, legacy = legacy, markerFails = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "marker 失敗應回 false")
+    state.files[P_CANON] = external  -- 外部程式在 session 期間改寫正典檔
+    state.opts.markerFails = false
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "應結案回 true")
+    assert(state.files[P_CANON] == external,
+        "外部寫入不得被 legacy 回滾，實得: " .. tostring(state.files[P_CANON]))
+    assert(state.files[P_PREBAK] == old4219, "備份仍應是原檔 OLD")
+    assert(state.files[P_MARKER] ~= nil, "應寫 marker 結案，不再重跑遷移")
+end)
+
+check("migrate(marker-unreadable): marker 存在但打不開 → fail closed 視為已處置，不重跑遷移", function()
+    -- probeFileContent 的 nil 含「存在但打不開」。若當成沒 marker，IO 抖動時會用殘留
+    -- legacy 覆蓋掉遷移後才寫進去的新資料。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "stale-legacy", "rects": [[1,2,3,4]] } ] }'
+    local current = '{ "zones": [ { "name": "current-data", "rects": [[5,5,6,6]] } ] }'
+    local state = newGenHarness(current, false, false,
+        { legacy = legacy, markerUnreadable = true })  -- marker 已 seed 但讀不到
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "應視為已處置並回 true")
+    assert(state.files[P_CANON] == current,
+        "zones.json 不得被殘留 legacy 覆蓋，實得: " .. tostring(state.files[P_CANON]))
+    assert(#writesTo(state, P_CANON) == 0, "不應對 zones.json 有任何寫入")
+end)
+
+check("migrate(canon-unreadable): 正典存在但打不開 → 中止，絕不當成空檔無備份覆寫", function()
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local current = '{ "zones": [ { "name": "current-data", "rects": [[5,5,6,6]] } ] }'
+    local state = newGenHarness(current, false, false,
+        { noMarker = true, legacy = legacy, canonUnreadable = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "不可讀應回 false")
+    assert(state.files[P_CANON] == current, "zones.json 不得被覆寫")
+    assert(state.files[P_PREBAK] == nil, "不應留下備份")
+    assert(state.files[P_MARKER] == nil, "不應寫 marker（下次啟動重試）")
+end)
+
+check("migrate(writer-nil-no-truncate): 正典 writer 取不到 → 絕不 truncate 一個沒被碰過的檔", function()
+    -- getFileWriter 回 nil 可能只是暫時性 IOException；若把它當成「寫壞了」而去 truncate，
+    -- 後續那次 truncate 反而會成功，等於親手清空一個我們根本沒動過的檔案。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local current = '{ "zones": [ { "name": "current-data", "rects": [[5,5,6,6]] } ] }'
+    local state = newGenHarness(current, false, false,
+        { noMarker = true, legacy = legacy, canonWriterFailsOnce = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "writer 取不到應回 false")
+    assert(state.files[P_CANON] == current,
+        "沒被碰過的 zones.json 不得被 truncate 清空，實得: " .. tostring(state.files[P_CANON]))
+    assert(state.files[P_MARKER] == nil, "不應寫 marker")
+end)
+
+check("generate(canon-unreadable): 生成按鈕遇正典不可讀 → 中止，不無備份覆寫", function()
+    _G.getTextOrNull = nil
+    local current = '{ "zones": [ { "name": "current-data", "rects": [[5,5,6,6]] } ] }'
+    local state = newGenHarness(current, false, false, { canonUnreadable = true })
+    local gen = MinidoracatZonesShared.generateTemplateForLanguage(nil)
+    assert(gen.ok == false, "不可讀應中止生成")
+    assert(state.files[P_CANON] == current, "zones.json 不得被覆寫")
+    assert(#writesTo(state, P_CANON) == 0, "不應對 zones.json 有任何寫入")
+end)
+
+check("migrate(prepared-not-applied/writer): 備份成功但 writer 取不到 → 下次啟動必須完成搬運", function()
+    -- 「備份存在」只證明 PREPARED，不證明 APPLIED。若只憑備份存在就結案，legacy 會被永久
+    -- 忽略、正典永遠停在舊資料——單次暫時性 writer 失敗就造成使用者 0.2.0 的資料再也回不來。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(old4219, false, false,
+        { noMarker = true, legacy = legacy, canonWriterFailsOnce = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "writer 取不到應回 false")
+    assert(state.files[P_CANON] == old4219, "第一輪 zones.json 不得被動到")
+    assert(state.files[P_PREBAK] == old4219, "第一輪應已備份原檔")
+    assert(state.files[P_MARKER] == nil, "第一輪不得寫 marker")
+    -- 第二輪（writer 恢復）：必須真的把 legacy 搬進去，而不是憑「備份存在」就結案
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "第二輪應成功")
+    assert(state.files[P_CANON] == legacy,
+        "第二輪必須完成搬運（legacy 不得被永久忽略），實得: " .. tostring(state.files[P_CANON]))
+    assert(state.files[P_PREBAK] == old4219, "備份仍應是原檔（write-once）")
+    assert(state.files[P_MARKER] ~= nil, "第二輪應寫 marker")
+end)
+
+check("migrate(prepared-not-applied/verify): 讀回不符被 truncate → 下次啟動必須完成搬運", function()
+    -- 同上，但第一輪是「寫了但驗證不符」→ zones.json 被 truncate 成空。空的正典檔同樣代表
+    -- 「尚未套用」，不可被當成「已套用後被改過」而結案。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(old4219, false, false,
+        { noMarker = true, legacy = legacy, canonCorrupt = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "讀回不符應回 false")
+    assert(state.files[P_CANON] == "", "半寫的 zones.json 應被 truncate 清空")
+    assert(state.files[P_PREBAK] == old4219, "應已備份原檔")
+    -- 第二輪（IO 恢復）
+    state.opts.canonCorrupt = false
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "第二輪應成功")
+    assert(state.files[P_CANON] == legacy,
+        "空的正典檔＝尚未套用，第二輪必須完成搬運，實得: " .. tostring(state.files[P_CANON]))
+    assert(state.files[P_PREBAK] == old4219, "備份仍應是原檔（write-once）")
+end)
+
+check("migrate(toctou): 讀取後、寫入前 zones.json 被外部改寫 → 中止，不得 truncate 掉新內容", function()
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local fresh = '{ "zones": [ { "name": "external-fresh", "rects": [[7,7,8,8]] } ] }'
+    local state = newGenHarness(old4219, false, false,
+        { noMarker = true, legacy = legacy, mutateCanonAfterRead = fresh })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "偵測到期間被改寫應中止")
+    assert(state.files[P_CANON] == fresh,
+        "外部剛寫入的內容不得被 truncate，實得: " .. tostring(state.files[P_CANON]))
+    assert(state.files[P_MARKER] == nil, "不應寫 marker（下次啟動重新評估）")
+end)
+
+check("template(canon-unreadable): 範本入口遇正典不可讀 → 中止，絕不 truncate 成示範範本", function()
+    -- writeZonesTemplate 的 probe 回 nil 有兩義；當成缺檔往下走，getFileWriter(append=false)
+    -- 會在建檔當下就把讀不到的真實正典資料輾掉。
+    _G.getTextOrNull = nil
+    local real = '{ "zones": [ { "name": "real-data", "rects": [[5,5,6,6]] } ] }'
+    local state = newGenHarness(real, false, false, { canonUnreadable = true })  -- marker 已 seed
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "不可讀應中止並回 false")
+    assert(state.files[P_CANON] == real,
+        "讀不到的正典資料不得被範本覆寫，實得: " .. tostring(state.files[P_CANON]))
+    assert(#writesTo(state, P_CANON) == 0, "不應對 zones.json 有任何寫入")
+    -- 空範本入口（執行期檔案消失路徑）同樣不得覆寫
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplateEmpty() == false, "空範本入口同樣應中止")
+    assert(state.files[P_CANON] == real, "空範本入口也不得覆寫")
+end)
+
+check("migrate(exists-probe-throws): 存在性探測失敗＝未知 → fail closed，不當成檔不存在", function()
+    -- fileExists 若把 pcall 失敗壓成 false，等於謊稱檔案不存在，下游就會無備份覆寫。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local real = '{ "zones": [ { "name": "real-data", "rects": [[5,5,6,6]] } ] }'
+    local state = newGenHarness(real, false, false,
+        { noMarker = true, legacy = legacy, canonUnreadable = true, cacheExistsThrows = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "未知應 fail closed 回 false")
+    assert(state.files[P_CANON] == real,
+        "存在性未知時不得覆寫正典，實得: " .. tostring(state.files[P_CANON]))
+    assert(state.files[P_PREBAK] == nil, "不應留下備份")
+    assert(state.files[P_MARKER] == nil, "不應寫 marker")
+end)
+
+check("migrate(partial-backup): 備份半寫失敗須清空 → 下次啟動不得誤判成「已套用後被改過」", function()
+    -- 備份寫失敗若留下非空半寫檔，下次啟動 bakDone 只看「非空」就當成有效收據，
+    -- 又因 existing ~= bakContent 判成 external edit → 寫 marker → legacy 永久被遮蔽。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(old4219, false, false,
+        { noMarker = true, legacy = legacy, preBakPartial = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "備份驗證失敗應回 false")
+    assert(state.files[P_CANON] == old4219, "zones.json 不得被動到")
+    assert(state.files[P_PREBAK] == "", "半寫備份必須被清空（非空備份＝已驗證備份）")
+    assert(state.files[P_MARKER] == nil, "不得寫 marker")
+    -- 第二輪（IO 恢復）：必須重做備份並完成搬運，而不是把半寫檔當收據結案
+    state.opts.preBakPartial = false
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "第二輪應成功")
+    assert(state.files[P_PREBAK] == old4219, "第二輪應重做備份為真正的原檔")
+    assert(state.files[P_CANON] == legacy,
+        "legacy 不得被遮蔽，第二輪須完成搬運，實得: " .. tostring(state.files[P_CANON]))
+end)
+
+check("migrate(marker-exists-probe-throws): marker 讀不到＋存在性未知 → fail closed 不重跑遷移", function()
+    -- fileExists 三態要在**呼叫點**也正確使用：直接當 boolean 用會讓 nil（未知）等同不存在，
+    -- 遷移重跑並用殘留 legacy 覆蓋掉現有正典。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "stale-legacy", "rects": [[1,2,3,4]] } ] }'
+    local current = '{ "zones": [ { "name": "current-data", "rects": [[5,5,6,6]] } ] }'
+    local state = newGenHarness(current, false, false,
+        { legacy = legacy, markerUnreadable = true, cacheExistsThrows = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "未知應 fail closed 視為已處置")
+    assert(state.files[P_CANON] == current,
+        "現有正典不得被殘留 legacy 覆蓋，實得: " .. tostring(state.files[P_CANON]))
+    assert(#writesTo(state, P_CANON) == 0, "不應對 zones.json 有任何寫入")
+end)
+
+check("template(toctou): probe 後、寫入前外部寫進真實資料 → 不得被範本覆寫", function()
+    _G.getTextOrNull = nil
+    local fresh = '{ "zones": [ { "name": "external-fresh", "rects": [[7,7,8,8]] } ] }'
+    -- 正典為全空白（probe 視同缺檔）→ 準備寫範本；期間外部寫入 fresh
+    local state = newGenHarness("   ", false, false, { mutateCanonAfterRead = fresh })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "已有內容應視為達成，回 true")
+    assert(state.files[P_CANON] == fresh,
+        "外部剛寫入的內容不得被範本 truncate，實得: " .. tostring(state.files[P_CANON]))
+    assert(#writesTo(state, P_CANON) == 0, "不應對 zones.json 有任何寫入")
+end)
+
+check("template(write-verify): 範本寫入未落地（PrintWriter 吞 IO）→ 必須回 false，不得謊報成功", function()
+    _G.getTextOrNull = nil
+    local state = newGenHarness(nil, false, false, { canonCorrupt = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false,
+        "寫後讀回不符應回 false（呼叫端才會 log 異常）")
+end)
+
+check("generate(toctou): 備份後、覆寫前外部寫進新資料 → 中止，不得銷毀它", function()
+    _G.getTextOrNull = nil
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local fresh = '{ "zones": [ { "name": "external-fresh", "rects": [[7,7,8,8]] } ] }'
+    -- 生成流程讀正典兩次（1: readFileCappedStrict 取備份來源；2: 臨寫前重讀），
+    -- 於第 1 次讀完後注入外部寫入
+    local state = newGenHarness(old4219, false, false,
+        { mutateCanonAfterRead = fresh, mutateAfterNthRead = 1 })
+    local gen = MinidoracatZonesShared.generateTemplateForLanguage(nil)
+    assert(gen.ok == false, "偵測到期間被改寫應中止")
+    assert(state.files[P_CANON] == fresh,
+        "外部剛寫入的內容不得被 truncate，實得: " .. tostring(state.files[P_CANON]))
+    assert(gen.bakName ~= nil, "備份已寫成，應回報 bakName 讓使用者知道舊內容在哪")
+end)
+
+check("generate(write-verify): 覆寫未落地 → ok=false 且照樣回報 bakName", function()
+    _G.getTextOrNull = nil
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(old4219, false, false, { canonCorrupt = true })
+    local gen = MinidoracatZonesShared.generateTemplateForLanguage(nil)
+    assert(gen.ok == false, "寫後讀回不符應回 ok=false，不得謊報成功")
+    assert(gen.backedUp == true and gen.bakName ~= nil,
+        "備份已通過驗證，須回報讓使用者可自行還原")
+    assert(state.files["MinidoracatMiniMapZones/" .. gen.bakName] == old4219,
+        "備份內容應為覆寫前的原檔")
+end)
+
+check("template(preflight-unknown): 兩次 probe 都是 nil 但檔案已被建立 → 不得 fail-open 覆寫", function()
+    -- 初始「確定不存在」與 preflight「存在但 reader 打不開」都回 nil；若拿兩值相等當
+    -- 「狀態沒變」，就會在未知狀態下 append=false 覆寫掉外部剛建立的真實資料。
+    _G.getTextOrNull = nil
+    local fresh = '{ "zones": [ { "name": "external-fresh", "rects": [[7,7,8,8]] } ] }'
+    local state = newGenHarness(nil, false, false, { canonAppearsUnreadable = fresh })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false,
+        "preflight 遇到未知狀態應中止（fail closed）")
+    assert(state.files[P_CANON] == fresh,
+        "外部剛建立的檔案不得被範本覆寫，實得: " .. tostring(state.files[P_CANON]))
+    assert(#writesTo(state, P_CANON) == 0, "不應對 zones.json 有任何寫入")
+end)
+
+check("migrate(partial-canon-uncleanable): 半寫正典清不乾淨 → 不得寫 marker 把壞狀態鎖死", function()
+    -- 讀回不符 → truncate 也失敗（雙重 IO 失敗）→ 正典留下破格半寫檔。下次啟動若把它
+    -- 當成「已套用後被外部改過」而寫 marker，legacy 就永久被遮蔽、且之後刪檔只會重生範本。
+    -- 以「內容能否被解析成合法 JSON」區分：破格 → 不寫 marker，回 false 等使用者清掉。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(old4219, false, false,
+        { noMarker = true, legacy = legacy, canonCorrupt = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "讀回不符應回 false")
+    -- 模擬 truncate 也失敗：手動把破格半寫內容放回去（清不乾淨的終態）
+    state.files[P_CANON] = "CORRUPTED-TXT-TRUNCA"  -- 截斷的破格 JSON
+    state.opts.canonCorrupt = false
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false,
+        "破格殘骸不得被當成 external edit 而寫 marker 結案")
+    assert(state.files[P_MARKER] == nil,
+        "不得寫 marker（寫了就把壞狀態鎖死、legacy 永久遮蔽）")
+    assert(state.files[P_CANON] == "CORRUPTED-TXT-TRUNCA", "不得覆蓋（可能是使用者資料）")
+    -- 使用者清掉壞檔後，下次啟動自動收斂
+    state.files[P_CANON] = nil
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "清掉壞檔後應自動收斂")
+    assert(state.files[P_CANON] == legacy, "收斂後應完成搬運")
+end)
+
+check("migrate(external-edit-still-closes): 合法 JSON 的外部改寫仍照常補 marker 結案", function()
+    -- 與上一則相對：內容能解析＝真的是外部寫的資料，不是殘骸 → 保持現狀、補 marker，
+    -- 不可用 legacy 回滾，也不該讓使用者每次啟動都看到失敗 log。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local external = '{ "zones": [ { "name": "external-new", "rects": [[5,5,6,6]] } ] }'
+    local state = newGenHarness(old4219, false, false,
+        { noMarker = true, legacy = legacy, markerFails = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "marker 失敗應回 false")
+    state.files[P_CANON] = external
+    state.opts.markerFails = false
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "合法 JSON 應補 marker 結案")
+    assert(state.files[P_CANON] == external, "外部寫入不得被 legacy 回滾")
+    assert(state.files[P_MARKER] ~= nil, "應寫 marker，不讓使用者每次啟動都看到失敗")
+end)
+
+check("migrate(partial-bak-uncleanable): 半寫備份清不乾淨 → 不得被當成有效收據而寫 marker", function()
+    -- 備份寫失敗 → truncate 也失敗（雙重 IO 失敗）→ 留下截斷的破格備份。若 bakDone 只看
+    -- 「非空」，下一輪會把正典誤判成「已套用後被改過」而寫 marker，legacy 永久被遮蔽。
+    -- 收據必須「非空且能解析成合法 JSON」才算數：破格 ⇒ 重做備份並完成搬運。
+    _G.getTextOrNull = nil
+    local legacy = '{ "zones": [ { "name": "legacy-data", "rects": [[1,2,3,4]] } ] }'
+    local old4219 = '{ "zones": [ { "name": "old-4219", "rects": [[9,9,10,10]] } ] }'
+    local state = newGenHarness(old4219, false, false,
+        { noMarker = true, legacy = legacy, preBakPartial = true })
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "備份驗證失敗應回 false")
+    -- 模擬 truncate 也失敗：破格半寫備份留在磁碟上
+    state.files[P_PREBAK] = '{ "zones": [ { "name": "old-42'  -- 截斷的破格 JSON
+    state.opts.preBakPartial = false
+    MinidoracatZonesShared._migrateSessionResult = nil
+    assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "第二輪應完成搬運")
+    assert(state.files[P_MARKER] ~= nil, "第二輪應寫 marker")
+    assert(state.files[P_PREBAK] == old4219,
+        "破格備份應被重做為真正的原檔，實得: " .. tostring(state.files[P_PREBAK]))
+    assert(state.files[P_CANON] == legacy,
+        "legacy 不得被遮蔽，須完成搬運，實得: " .. tostring(state.files[P_CANON]))
 end)
 
 check("migrate(d): legacy 超過 1MB → 遷移失敗、不寫 marker、不寫範本（下次啟動重試）", function()
@@ -714,19 +1176,21 @@ check("migrate(d): legacy 超過 1MB → 遷移失敗、不寫 marker、不寫�
     assert(state.files[P_MARKER] == nil, "遷移失敗不應寫 marker（保留下次重試）")
 end)
 
-check("migrate(e): 42.20 白名單回歸鎖——非白名單副檔名被拒、實際寫檔全為 .txt", function()
+check("migrate(e): 白名單回歸鎖——每個寫檔路徑的副檔名都在白名單內、裸 .bak 仍被拒", function()
     _G.getTextOrNull = nil
     local state = newGenHarness('{ "zones": [ { "name": "existing", "rects": [[1,2,3,4]] } ] }')
-    -- stub 自身模擬引擎行為：.json／裸 .bak 靜默回 nil（0.1.0 的 stub 測不到這件事）
-    assert(_G.getFileWriter(P_JSON, true, false) == nil, ".json 應被白名單拒絕")
+    -- stub 模擬引擎：42.20.1+ 的 json 過關，裸 .bak 與大小寫不符者靜默回 nil
+    assert(_G.getFileWriter(P_CANON, true, false) ~= nil, "42.20.1+ 的 .json 應可寫")
     assert(_G.getFileWriter("MinidoracatMiniMapZones/zones.20260101-120000.bak", true, false) == nil,
-        "裸 .bak 應被白名單拒絕")
-    -- 生成流程（備份＋覆寫）走完，所有成功寫入的 path 皆為 .txt
+        "裸 .bak 應被白名單拒絕（getFileExtension 只看最後一個點之後）")
+    assert(_G.getFileWriter("MinidoracatMiniMapZones/zones.JSON", true, false) == nil,
+        "白名單大小寫敏感，.JSON 應被拒絕")
+    -- 生成流程（備份＋覆寫）走完，所有成功寫入的副檔名都必須在白名單內
     local gen = MinidoracatZonesShared.generateTemplateForLanguage(nil)
-    assert(gen.ok == true, "生成應成功（全部寫檔已改白名單副檔名）")
-    assert(#state.writes >= 2, "應含 .bak.txt 備份＋zones.txt 覆寫")
+    assert(gen.ok == true, "生成應成功（全部寫檔皆為白名單副檔名）")
+    assert(#state.writes >= 2, "應含 .bak.json 備份＋zones.json 覆寫")
     for _, w in ipairs(state.writes) do
-        assert(w.path:find("%.txt$") ~= nil, "寫檔路徑應以 .txt 結尾，卻寫了 " .. w.path)
+        assert(extAllowed(w.path), "寫檔副檔名應在白名單內，卻寫了 " .. w.path)
     end
 end)
 
@@ -736,8 +1200,8 @@ check("migrate(f): legacy 尾端空行（\n\n 結尾）→ 剝除後仍成功遷
     local state = newGenHarness(nil, false, false, { noMarker = true, legacy = legacy })
     assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "尾端空行的合法舊檔應成功遷移")
     assert(state.files[P_MARKER] ~= nil, "應寫 marker")
-    assert(state.files[P_TXT] == '{ "zones": [ { "name": "existing", "rects": [[1,2,3,4]] } ] }',
-        "zones.txt 應為剝除尾端空行後的內容")
+    assert(state.files[P_CANON] == '{ "zones": [ { "name": "existing", "rects": [[1,2,3,4]] } ] }',
+        "zones.json 應為剝除尾端空行後的內容")
 end)
 
 check("migrate(g): marker 寫入失敗（migrated 分支）→ 回 false 不追認；marker 恢復後補寫成功", function()
@@ -747,7 +1211,7 @@ check("migrate(g): marker 寫入失敗（migrated 分支）→ 回 false 不追�
     assert(MinidoracatZonesShared.ensureZonesTemplate() == false,
         "marker（不變式承載者）寫失敗應回 false")
     assert(state.files[P_MARKER] == nil, "marker 不應存在")
-    -- marker IO 恢復（下次啟動）：txt 已有遷移內容 → 快速路徑補 marker 成功
+    -- marker IO 恢復（下次啟動）：legacy 內容再搬一次（冪等）→ 補 marker 成功
     state.opts.markerFails = false
     MinidoracatZonesShared._migrateSessionResult = nil
     assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "恢復後應補 marker 並回 true")
@@ -757,15 +1221,15 @@ end)
 check("migrate(h): 寫後讀回不符 → truncate 清空正典檔、不寫 marker；下次啟動從 legacy 重試成功", function()
     _G.getTextOrNull = nil
     local legacy = '{ "zones": [ { "name": "existing", "rects": [[1,2,3,4]] } ] }'
-    local state = newGenHarness(nil, false, false, { noMarker = true, legacy = legacy, txtCorrupt = true })
+    local state = newGenHarness(nil, false, false, { noMarker = true, legacy = legacy, canonCorrupt = true })
     assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "讀回不符應回 false")
     assert(state.files[P_MARKER] == nil, "讀回不符不應寫 marker（防追認損壞檔）")
-    assert(state.files[P_TXT] == "", "損壞的 zones.txt 應被 truncate 清空（防快速路徑追認）")
+    assert(state.files[P_CANON] == "", "損壞的 zones.json 應被 truncate 清空（防下次啟動追認）")
     -- 下次啟動（IO 恢復）：txt 空白 → 從 legacy 重試 → 成功
-    state.opts.txtCorrupt = false
+    state.opts.canonCorrupt = false
     MinidoracatZonesShared._migrateSessionResult = nil
     assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "IO 恢復後重試應成功")
-    assert(state.files[P_TXT] == legacy, "重試後 zones.txt 應為 legacy 內容")
+    assert(state.files[P_CANON] == legacy, "重試後 zones.json 應為 legacy 內容")
     assert(state.files[P_MARKER] ~= nil, "重試成功應寫 marker")
 end)
 
@@ -776,11 +1240,11 @@ check("migrate(i): generateTemplateForLanguage 的遷移閘——legacy 先搬�
     local gen = MinidoracatZonesShared.generateTemplateForLanguage(nil)
     assert(gen.ok == true, "生成應成功")
     assert(state.files[P_MARKER] ~= nil, "生成前應先完成遷移（marker 已寫）")
-    assert(gen.backedUp == true, "遷移後 zones.txt 有內容，生成應先備份")
+    assert(gen.backedUp == true, "遷移後 zones.json 有內容，生成應先備份")
     local bakPath = "MinidoracatMiniMapZones/" .. tostring(gen.bakName)
     assert(state.files[bakPath] == legacy, "備份內容應為遷移進來的 legacy 內容")
-    local result = MinidoracatZonesShared.validateZones(MinidoracatZonesJson.decode(state.files[P_TXT]))
-    assert(result.count == 4, "zones.txt 最終應為 4 區域範本")
+    local result = MinidoracatZonesShared.validateZones(MinidoracatZonesJson.decode(state.files[P_CANON]))
+    assert(result.count == 4, "zones.json 最終應為 4 區域範本")
 end)
 
 check("migrate(j): session 快取——oversize legacy 只實讀一次，重複呼叫不重掃", function()
@@ -788,13 +1252,13 @@ check("migrate(j): session 快取——oversize legacy 只實讀一次，重複�
     local huge = string.rep("x", MinidoracatZonesShared.LIMITS.maxFileBytes + 10)
     local state = newGenHarness(nil, false, false, { noMarker = true, legacy = huge })
     assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "oversize 應回 false")
-    local readsAfterFirst = state.reads[P_JSON] or 0
+    local readsAfterFirst = state.reads[P_LEGACY] or 0
     assert(readsAfterFirst >= 1, "首次應實讀 legacy")
     -- 模擬 pollNow 穩態迴圈：不重置快取連續呼叫，不得再開 legacy
     for _ = 1, 3 do
         assert(MinidoracatZonesShared.ensureZonesTemplateEmpty() == false, "快取 false 應持續回 false")
     end
-    assert((state.reads[P_JSON] or 0) == readsAfterFirst,
+    assert((state.reads[P_LEGACY] or 0) == readsAfterFirst,
         "session 快取應防止 legacy 重掃，讀取次數不應增加")
 end)
 
@@ -808,7 +1272,7 @@ check("migrate(k): legacy 存在但不可讀（reader nil＋cacheFileExists true
     state.opts.legacyUnreadable = false
     MinidoracatZonesShared._migrateSessionResult = nil
     assert(MinidoracatZonesShared.ensureZonesTemplate() == true, "恢復可讀後應遷移成功")
-    assert(state.files[P_TXT] == legacy, "遷移內容應為 legacy 原樣")
+    assert(state.files[P_CANON] == legacy, "遷移內容應為 legacy 原樣")
 end)
 
 check("migrate(l): verify 讀回拋例外 → 收斂 false＋truncate，同 session 不被追認", function()
@@ -817,7 +1281,7 @@ check("migrate(l): verify 讀回拋例外 → 收斂 false＋truncate，同 sess
     local state = newGenHarness(nil, false, false, { noMarker = true, legacy = legacy, verifyThrows = true })
     assert(MinidoracatZonesShared.ensureZonesTemplate() == false, "verify 例外應收斂為 false（非上拋）")
     assert(state.files[P_MARKER] == nil, "例外不應寫 marker")
-    assert(state.files[P_TXT] == "", "例外後半寫的 zones.txt 應被 truncate 清空")
+    assert(state.files[P_CANON] == "", "例外後半寫的 zones.json 應被 truncate 清空")
     assert(MinidoracatZonesShared.ensureZonesTemplateEmpty() == false, "同 session 快取 false，不重跑")
     assert(state.files[P_MARKER] == nil, "同 session 不得經快速路徑追認")
 end)
@@ -828,7 +1292,7 @@ check("generate(migrate-false): 遷移失敗（marker 寫不出）→ 生成中�
     local state = newGenHarness(nil, false, false, { noMarker = true, legacy = legacy, markerFails = true })
     local gen = MinidoracatZonesShared.generateTemplateForLanguage(nil)
     assert(gen.ok == false, "遷移失敗生成應中止（belt-and-suspenders 閘）")
-    assert(state.files[P_TXT] == legacy, "zones.txt 應停在遷移內容，不被示範範本覆寫")
+    assert(state.files[P_CANON] == legacy, "zones.json 應停在遷移內容，不被示範範本覆寫")
 end)
 
 -------------------------------------------------------------------------------
@@ -871,16 +1335,16 @@ local GEN_NAMES = {
     UI_MinidoracatMiniMapZones_TplDoc = "CUR doc",
 }
 
-check("generate(nil): 跟隨當前→zones.txt，decode 4 區域（含多矩形）＋名稱取自 getText", function()
+check("generate(nil): 跟隨當前→zones.json，decode 4 區域（含多矩形）＋名稱取自 getText", function()
     _G.getTextOrNull = function(k) return GEN_NAMES[k] end
-    local state = newGenHarness(nil)  -- zones.txt 不存在 → 寫 zones.txt
+    local state = newGenHarness(nil)  -- zones.json 不存在 → 寫 zones.json
     local gen = MinidoracatZonesShared.generateTemplateForLanguage(nil)
     assert(gen.ok == true, "生成應成功")
-    assert(gen.wrotePath == "zones.txt", "空檔應寫 zones.txt，得到 " .. tostring(gen.wrotePath))
+    assert(gen.wrotePath == "zones.json", "空檔應寫 zones.json，得到 " .. tostring(gen.wrotePath))
     assert(gen.backedUp == false, "缺檔生成不應備份，backedUp 應為 false")
     assert(gen.bakName == nil, "缺檔生成 bakName 應為 nil，得到 " .. tostring(gen.bakName))
-    assert(#state.writes == 1 and state.writes[1].path == "MinidoracatMiniMapZones/zones.txt",
-        "應恰寫入 zones.txt 一次（無 .bak）")
+    assert(#state.writes == 1 and state.writes[1].path == "MinidoracatMiniMapZones/zones.json",
+        "應恰寫入 zones.json 一次（無 .bak）")
     local raw = table.concat(state.writes[1].parts, "")
     assertTemplateSafe(raw)
     local result = MinidoracatZonesShared.validateZones(MinidoracatZonesJson.decode(raw))
@@ -890,49 +1354,49 @@ check("generate(nil): 跟隨當前→zones.txt，decode 4 區域（含多矩形�
         "第四區域應為多矩形（兩 rects）")
 end)
 
-check("generate(有內容→備份+套用): zones.txt 有內容→先原樣備份 .bak 再覆寫 zones.txt", function()
+check("generate(有內容→備份+套用): zones.json 有內容→先原樣備份 .bak 再覆寫 zones.json", function()
     _G.getTextOrNull = function(k) return GEN_NAMES[k] end
     local oldContent = '{ "zones": [ { "name": "existing" } ] }'
-    local state = newGenHarness(oldContent)  -- zones.txt 已有內容
+    local state = newGenHarness(oldContent)  -- zones.json 已有內容
     local gen = MinidoracatZonesShared.generateTemplateForLanguage(nil)
     assert(gen.ok == true, "生成應成功")
-    assert(gen.wrotePath == "zones.txt", "有內容也一律套用到 zones.txt，得到 " .. tostring(gen.wrotePath))
+    assert(gen.wrotePath == "zones.json", "有內容也一律套用到 zones.json，得到 " .. tostring(gen.wrotePath))
     assert(gen.backedUp == true, "有內容應先備份，backedUp 應為 true")
-    assert(gen.bakName == "zones.20260101-120000.bak.txt",
+    assert(gen.bakName == "zones.20260101-120000.bak.json",
         "bakName 應為時間戳備份檔名，得到 " .. tostring(gen.bakName))
-    -- 順序：先寫 .bak（原樣備份），再寫 zones.txt（新範本）
-    assert(#state.writes == 2, "應恰兩次寫入（.bak + zones.txt），得到 " .. #state.writes)
-    assert(state.writes[1].path == "MinidoracatMiniMapZones/zones.20260101-120000.bak.txt",
+    -- 順序：先寫 .bak（原樣備份），再寫 zones.json（新範本）
+    assert(#state.writes == 2, "應恰兩次寫入（.bak + zones.json），得到 " .. #state.writes)
+    assert(state.writes[1].path == "MinidoracatMiniMapZones/zones.20260101-120000.bak.json",
         "第一次寫入應為時間戳 .bak 備份，得到 " .. state.writes[1].path)
-    assert(state.writes[2].path == "MinidoracatMiniMapZones/zones.txt",
-        "第二次寫入應覆寫 zones.txt，得到 " .. state.writes[2].path)
-    -- (a) .bak 內容與舊 zones.txt byte 相同（單行內容 readLine 逐行 concat 完整還原）
+    assert(state.writes[2].path == "MinidoracatMiniMapZones/zones.json",
+        "第二次寫入應覆寫 zones.json，得到 " .. state.writes[2].path)
+    -- (a) .bak 內容與舊 zones.json byte 相同（單行內容 readLine 逐行 concat 完整還原）
     assert(table.concat(state.writes[1].parts, "") == oldContent,
-        ".bak 內容應與舊 zones.txt byte 相同")
-    -- zones.txt 為新 4 區域範本
+        ".bak 內容應與舊 zones.json byte 相同")
+    -- zones.json 為新 4 區域範本
     local result = MinidoracatZonesShared.validateZones(
         MinidoracatZonesJson.decode(table.concat(state.writes[2].parts, "")))
-    assert(result.count == 4, "zones.txt 應為新 4 區域範本，得到 " .. result.count)
+    assert(result.count == 4, "zones.json 應為新 4 區域範本，得到 " .. result.count)
 end)
 
-check("generate(備份失敗→中止): .bak 寫入失敗→中止、zones.txt 不被寫、ok=false", function()
+check("generate(備份失敗→中止): .bak 寫入失敗→中止、zones.json 不被寫、ok=false", function()
     _G.getTextOrNull = function(k) return GEN_NAMES[k] end
     local oldContent = '{ "zones": [ { "name": "existing" } ] }'
-    local state = newGenHarness(oldContent, true)  -- *.bak.txt 的 getFileWriter 回 nil（備份失敗）
+    local state = newGenHarness(oldContent, true)  -- *.bak.json 的 getFileWriter 回 nil（備份失敗）
     local gen = MinidoracatZonesShared.generateTemplateForLanguage(nil)
     assert(gen.ok == false, "備份失敗應回 ok=false，得到 " .. tostring(gen.ok))
     assert(gen.wrotePath == nil, "備份失敗不應回 wrotePath，得到 " .. tostring(gen.wrotePath))
     assert(gen.backedUp == false, "備份失敗 backedUp 應為 false")
     assert(gen.bakName == nil, "備份失敗 bakName 應為 nil，得到 " .. tostring(gen.bakName))
-    -- 關鍵：zones.txt 一位元組不動（getFileWriter 從未成功寫過 zones.txt）
+    -- 關鍵：zones.json 一位元組不動（getFileWriter 從未成功寫過 zones.json）
     for _, w in ipairs(state.writes) do
-        assert(w.path ~= "MinidoracatMiniMapZones/zones.txt",
-            "備份失敗絕不可寫 zones.txt，卻寫了 " .. w.path)
+        assert(w.path ~= "MinidoracatMiniMapZones/zones.json",
+            "備份失敗絕不可寫 zones.json，卻寫了 " .. w.path)
     end
     assert(#state.writes == 0, "備份失敗不應留下任何成功寫入，得到 " .. #state.writes)
 end)
 
-check("generate(fix3b): bak 讀回驗證失敗（PrintWriter 吞 IO）→中止、zones.txt 不被寫、ok=false", function()
+check("generate(fix3b): bak 讀回驗證失敗（PrintWriter 吞 IO）→中止、zones.json 不被寫、ok=false", function()
     _G.getTextOrNull = function(k) return GEN_NAMES[k] end
     local oldContent = '{ "zones": [ { "name": "existing" } ] }'
     local state = newGenHarness(oldContent, false, true)  -- .bak 落地內容與寫入不符
@@ -940,21 +1404,21 @@ check("generate(fix3b): bak 讀回驗證失敗（PrintWriter 吞 IO）→中止�
     assert(gen.ok == false, "讀回驗證失敗應回 ok=false，得到 " .. tostring(gen.ok))
     assert(gen.wrotePath == nil, "讀回驗證失敗不應回 wrotePath，得到 " .. tostring(gen.wrotePath))
     assert(gen.backedUp == false and gen.bakName == nil, "讀回驗證失敗不應宣稱備份成功")
-    -- 關鍵：zones.txt 一位元組不動（.bak 寫過但 zones.txt 從未被寫）
+    -- 關鍵：zones.json 一位元組不動（.bak 寫過但 zones.json 從未被寫）
     for _, w in ipairs(state.writes) do
-        assert(w.path ~= "MinidoracatMiniMapZones/zones.txt",
-            "讀回驗證失敗絕不可寫 zones.txt，卻寫了 " .. w.path)
+        assert(w.path ~= "MinidoracatMiniMapZones/zones.json",
+            "讀回驗證失敗絕不可寫 zones.json，卻寫了 " .. w.path)
     end
 end)
 
-check("generate(blank→zones.txt): zones.txt 全空白視同缺檔→寫 zones.txt（非 example）", function()
+check("generate(blank→zones.json): zones.json 全空白視同缺檔→寫 zones.json（非 example）", function()
     _G.getTextOrNull = function(k) return GEN_NAMES[k] end
     local state = newGenHarness("   \n\t\n")  -- 存在但全空白
     local gen = MinidoracatZonesShared.generateTemplateForLanguage(nil)
-    assert(gen.wrotePath == "zones.txt", "全空白應視同缺檔寫 zones.txt，得到 " .. tostring(gen.wrotePath))
+    assert(gen.wrotePath == "zones.json", "全空白應視同缺檔寫 zones.json，得到 " .. tostring(gen.wrotePath))
     assert(gen.backedUp == false, "全空白視同缺檔不應備份，backedUp 應為 false")
-    assert(#state.writes == 1 and state.writes[1].path == "MinidoracatMiniMapZones/zones.txt",
-        "應恰寫 zones.txt 一次（無 .bak）")
+    assert(#state.writes == 1 and state.writes[1].path == "MinidoracatMiniMapZones/zones.json",
+        "應恰寫 zones.json 一次（無 .bak）")
 end)
 
 check("generate(指定語系)[ENV-LIMITED]: 桌面 Lua decode CJK \\u range-error → pcall 吞成 ok=false", function()
@@ -980,15 +1444,15 @@ end)
 -- handlers/fileContent/captured，避免跨 check 互相污染狀態。
 local function newServerHarness()
     MinidoracatZonesShared._migrateSessionResult = nil  -- 重置遷移 session 快取（每 check 獨立）
-    -- path-aware：zones.txt 走 fileContent（既有測試介面不變）；marker 預設「已處理」
+    -- path-aware：zones.json 走 fileContent（既有測試介面不變）；marker 預設「已處理」
     -- （migration no-op，維持既有測試的 writerCalls 語意）；legacy zones.json 預設不存在；
-    -- 其他路徑（.bak.txt 等）落 state.files（writer close 後落地，供讀回驗證）。
+    -- 其他路徑（.bak.json 等）落 state.files（writer close 後落地，供讀回驗證）。
     local state = { fileContent = nil, markerContent = "handled", legacyContent = nil,
                     files = {}, handlers = {}, sent = {}, written = {}, writerCalls = 0 }
     local function contentFor(path)
         if path == P_MARKER then return state.markerContent end
-        if path == P_JSON then return state.legacyContent end
-        if path == P_TXT then return state.fileContent end
+        if path == P_LEGACY then return state.legacyContent end
+        if path == P_CANON then return state.fileContent end
         return state.files[path]
     end
     _G.cacheFileExists = function(path) return contentFor(path) ~= nil end
@@ -1018,9 +1482,9 @@ local function newServerHarness()
     -- getTextOrNull=nil → 範本 _doc 走 ASCII fallback（server 測試不校驗翻譯文字，求確定性）。
     _G.getTextOrNull = nil
     _G.getFileWriter = function(path, _, _)
-        if not extAllowed(path) then return nil end  -- 42.20 副檔名白名單模擬（核心回歸鎖）
+        if not extAllowed(path) then return nil end  -- 副檔名白名單模擬（核心回歸鎖）
         if path == P_MARKER then
-            -- marker 寫入不計入 writerCalls（既有測試斷言只針對範本/zones.txt 寫入）
+            -- marker 寫入不計入 writerCalls（既有測試斷言只針對範本/zones.json 寫入）
             return { write = function(_, s) state.markerContent = (state.markerContent or "") .. s end,
                      close = function() end }
         end
@@ -1029,9 +1493,9 @@ local function newServerHarness()
         return { write = function(_, s) parts[#parts + 1] = s; state.written[#state.written + 1] = s end,
                  close = function()
                      state.files[path] = table.concat(parts, "")
-                     -- zones.txt 寫入落地回 fileContent：後續 pollNow 讀到「剛寫出的內容」
+                     -- zones.json 寫入落地回 fileContent：後續 pollNow 讀到「剛寫出的內容」
                      -- （修 codex 抓到的假綠：生成後廣播的其實是舊快取）
-                     if path == P_TXT then state.fileContent = state.files[path] end
+                     if path == P_CANON then state.fileContent = state.files[path] end
                  end }
     end
     _G.isServer = function() return true end
@@ -1241,9 +1705,9 @@ check("server(gen): 非 admin 的 generateTemplate 被拒（不生成、不回 g
         .. (state.writerCalls - before) .. " 次")
 end)
 
-check("server(gen): admin＋zones.txt 有內容→備份+套用 zones.txt＋廣播恰一次、backedUp=true", function()
+check("server(gen): admin＋zones.json 有內容→備份+套用 zones.json＋廣播恰一次、backedUp=true", function()
     local state = newServerHarness()
-    state.fileContent = '[{"name":"Z1","rects":[[0,0,10,10]]}]'  -- zones.txt 已有內容
+    state.fileContent = '[{"name":"Z1","rects":[[0,0,10,10]]}]'  -- zones.json 已有內容
     state.handlers.onServerStarted()
     for _ = 1, 5 do state.handlers.onTick() end  -- 沖掉暖啟動廣播
     state.sent = {}
@@ -1256,12 +1720,12 @@ check("server(gen): admin＋zones.txt 有內容→備份+套用 zones.txt＋廣�
         if call[2] == "zoneData" then broadcastCount = broadcastCount + 1 end
     end
     assert(genResult and genResult.ok == true, "應回 generateResult ok=true")
-    assert(genResult.path == "zones.txt",
-        "有內容也一律套用 zones.txt，path 得到 " .. tostring(genResult.path))
+    assert(genResult.path == "zones.json",
+        "有內容也一律套用 zones.json，path 得到 " .. tostring(genResult.path))
     assert(genResult.backedUp == true, "有內容應先備份，backedUp 應為 true")
-    assert(type(genResult.bakName) == "string" and genResult.bakName:match("^zones%..+%.bak%.txt$"),
+    assert(type(genResult.bakName) == "string" and genResult.bakName:match("^zones%..+%.bak%.json$"),
         "generateResult 應轉發時間戳 bakName，得到 " .. tostring(genResult.bakName))
-    assert(broadcastCount == 1, "成功套用 zones.txt 應觸發 pollNow 全體廣播恰一次，得到 " .. broadcastCount .. " 包")
+    assert(broadcastCount == 1, "成功套用 zones.json 應觸發 pollNow 全體廣播恰一次，得到 " .. broadcastCount .. " 包")
     local zoneTotal = 0
     for _, call in ipairs(state.sent) do
         if call[2] == "zoneData" then zoneTotal = zoneTotal + #((call[3] or {}).zones or {}) end
@@ -1269,12 +1733,12 @@ check("server(gen): admin＋zones.txt 有內容→備份+套用 zones.txt＋廣�
     assert(zoneTotal == 4, "廣播內容應為新寫入的 4 區域範本（非舊快取），得到 " .. zoneTotal)
 end)
 
-check("server(gen): admin＋zones.txt 空→寫 zones.txt＋pollNow 廣播、path=zones.txt", function()
+check("server(gen): admin＋zones.json 空→寫 zones.json＋pollNow 廣播、path=zones.json", function()
     local state = newServerHarness()
     state.fileContent = '[{"name":"Z1","rects":[[0,0,10,10]]}]'
     state.handlers.onServerStarted()
     for _ = 1, 5 do state.handlers.onTick() end  -- 沖掉暖啟動廣播
-    state.fileContent = nil  -- 執行期 zones.txt 消失 → generateTemplate 應寫 zones.txt
+    state.fileContent = nil  -- 執行期 zones.json 消失 → generateTemplate 應寫 zones.json
     state.sent = {}
     local admin = { getRole = function() return { hasCapability = function() return true end } end }
     state.handlers.onClientCommand("MinidoracatMiniMapZones", "generateTemplate", admin, {})
@@ -1284,10 +1748,10 @@ check("server(gen): admin＋zones.txt 空→寫 zones.txt＋pollNow 廣播、pat
         if call[3] == "generateResult" then genResult = call[4] end
         if call[2] == "zoneData" then broadcast = true end
     end
-    assert(genResult and genResult.ok == true and genResult.path == "zones.txt",
-        "空檔應寫 zones.txt，path 得到 " .. tostring(genResult and genResult.path))
+    assert(genResult and genResult.ok == true and genResult.path == "zones.json",
+        "空檔應寫 zones.json，path 得到 " .. tostring(genResult and genResult.path))
     assert(genResult.backedUp == false, "空檔生成不應備份，backedUp 應為 false")
-    assert(broadcast, "寫 zones.txt 應觸發 pollNow 全體廣播（zoneData）")
+    assert(broadcast, "寫 zones.json 應觸發 pollNow 全體廣播（zoneData）")
 end)
 
 -- fix1：zones 欄位非陣列（fatal）→ 保留舊快取、不清空不廣播

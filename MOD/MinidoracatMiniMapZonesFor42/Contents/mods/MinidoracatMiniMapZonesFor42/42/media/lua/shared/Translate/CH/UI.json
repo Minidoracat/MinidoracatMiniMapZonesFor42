@@ -1,6 +1,6 @@
 {
     "UI_MinidoracatMiniMapZones_ServerZones": "顯示伺服器區域",
-    "UI_MinidoracatMiniMapZones_ServerZones_tooltip": "顯示伺服器透過 zones.txt 推送的自訂區域（半透明填色＋框線＋名稱）。原版地圖資源點（POI）已內建於主 MOD，不在本 addon。",
+    "UI_MinidoracatMiniMapZones_ServerZones_tooltip": "顯示伺服器透過 zones.json 推送的自訂區域（半透明填色＋框線＋名稱）。原版地圖資源點（POI）已內建於主 MOD，不在本 addon。",
     "UI_MinidoracatMiniMapZones_ReloadSent": "已送出 /reloadzones 重新載入請求…",
     "UI_MinidoracatMiniMapZones_ReloadResult": "區域資料已重新載入（%1 個區域）",
     "UI_MinidoracatMiniMapZones_ReloadFailed": "區域資料重新載入失敗：%1",
@@ -10,15 +10,15 @@
     "UI_MinidoracatMiniMapZones_TplMultiRect": "示範：多矩形 L 形（Riverside）",
     "UI_MinidoracatMiniMapZones_TplDoc": "區域僅為地圖顯示標示，不影響任何遊戲機制（本 MOD 無 PVP／安全區等功能）。以上為示範區域，可自行修改或刪除。每個區域可加 \"enabled\": false 暫時隱藏而不必刪除（省略視為 true）。座標為世界 square 座標 [x1,y1,x2,y2]（左上到右下）。直接以任何語言文字編輯皆可（檔案以 UTF-8 讀取）。改檔後等輪詢間隔或 admin 下 /reloadzones 立即生效，無需重啟。",
     "UI_MinidoracatMiniMapZones_GenTemplate": "生成區域範本",
-    "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "以選定語言生成含四個示範區域的 zones.txt 範本並立即套用。zones.txt 不存在或空白時直接寫入；已有內容時，會先把舊檔備份為帶時間戳的檔案（如 zones.20260101-120000.bak.txt，每次生成各自保留、不互相覆蓋）再覆寫。備份失敗則不動 zones.txt。在伺服器上需要「管理模組」權限。",
+    "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "以選定語言生成含四個示範區域的 zones.json 範本並立即套用。zones.json 不存在或空白時直接寫入；已有內容時，會先把舊檔備份為帶時間戳的檔案（如 zones.20260101-120000.bak.json，每次生成各自保留、不互相覆蓋）再覆寫。備份失敗則不動 zones.json。在伺服器上需要「管理模組」權限。",
     "UI_MinidoracatMiniMapZones_LangCurrent": "跟隨當前語言",
     "UI_MinidoracatMiniMapZones_LangCH": "繁體中文",
     "UI_MinidoracatMiniMapZones_LangCN": "简体中文",
     "UI_MinidoracatMiniMapZones_LangEN": "English",
     "UI_MinidoracatMiniMapZones_LangJP": "日本語",
-    "UI_MinidoracatMiniMapZones_GenConfirm": "確定以「%1」生成區域範本？\\n現有 zones.txt 會先備份（檔名帶時間戳）再覆寫。",
+    "UI_MinidoracatMiniMapZones_GenConfirm": "確定以「%1」生成區域範本？\\n現有 zones.json 會先備份（檔名帶時間戳）再覆寫。",
     "UI_MinidoracatMiniMapZones_GenSent": "已送出範本生成請求…",
     "UI_MinidoracatMiniMapZones_GenResult": "範本已寫入 %1",
-    "UI_MinidoracatMiniMapZones_GenResultBackup": "舊 zones.txt 已備份為 %1，範本已寫入",
+    "UI_MinidoracatMiniMapZones_GenResultBackup": "舊 zones.json 已備份為 %1，範本已寫入",
     "UI_MinidoracatMiniMapZones_GenFailed": "範本生成失敗：%1"
 }
