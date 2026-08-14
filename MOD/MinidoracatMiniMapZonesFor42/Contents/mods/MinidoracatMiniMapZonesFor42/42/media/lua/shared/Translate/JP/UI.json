@@ -8,6 +8,8 @@
     "UI_MinidoracatMiniMapZones_TplRosewood": "デモゾーン：Rosewood 消防署",
     "UI_MinidoracatMiniMapZones_TplBunker": "デモゾーン：March Ridge 地下壕",
     "UI_MinidoracatMiniMapZones_TplMultiRect": "デモゾーン：複数矩形の L 字（Riverside）",
+    "UI_MinidoracatMiniMapZones_TplCatTown": "デモ：町",
+    "UI_MinidoracatMiniMapZones_TplCatField": "デモ：野外",
     "UI_MinidoracatMiniMapZones_TplDoc": "ゾーンはマップ表示用のマーカーのみで、ゲームの動作には影響しません（この MOD に PVP／安全地帯などの機能はありません）。上記はデモゾーンです。自由に編集・削除できます。各ゾーンに \"enabled\": false を追加すると、削除せずに一時的に非表示にできます（省略時は true）。座標はワールドの square 座標 [x1,y1,x2,y2]（左上から右下）です。任意の言語で編集できます（ファイルは UTF-8 で読み込まれます）。変更はポーリング間隔の後、または管理者が /reloadzones を実行すると即座に反映され、再起動は不要です。",
     "UI_MinidoracatMiniMapZones_GenTemplate": "ゾーンテンプレートを生成",
     "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "選択した言語で 4 つのデモゾーンを含む zones.json テンプレートを生成し、直ちに適用します。zones.json が空または存在しない場合は直接書き込みます。内容がある場合は、まず古いファイルをタイムスタンプ付きファイル（例：zones.20260101-120000.bak.json。生成のたびに個別に保存され、上書きされません）にバックアップしてから上書きします。バックアップに失敗した場合、zones.json は変更されません。サーバーでは「MOD 管理」権限が必要です。",

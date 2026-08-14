@@ -8,6 +8,8 @@
     "UI_MinidoracatMiniMapZones_TplRosewood": "Demo zone: Rosewood Fire Dept",
     "UI_MinidoracatMiniMapZones_TplBunker": "Demo zone: March Ridge Bunker",
     "UI_MinidoracatMiniMapZones_TplMultiRect": "Demo zone: multi-rect L-shape (Riverside)",
+    "UI_MinidoracatMiniMapZones_TplCatTown": "Demo: Town",
+    "UI_MinidoracatMiniMapZones_TplCatField": "Demo: Field",
     "UI_MinidoracatMiniMapZones_TplDoc": "Zones are map display markers only -- they do not affect gameplay (this mod has no PVP/safe-zone mechanics). The zones above are demos; edit or delete them freely. Add \"enabled\": false to a zone to hide it without deleting (omitted means true). Coordinates are world square coordinates [x1,y1,x2,y2] (top-left to bottom-right). You can edit them in any language (the file is read as UTF-8). Changes take effect after the poll interval, or immediately when an admin runs /reloadzones -- no restart needed.",
     "UI_MinidoracatMiniMapZones_GenTemplate": "Generate zones template",
     "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "Generate a zones.json template with four demo zones in the chosen language and apply it immediately. If zones.json is empty or missing it is written directly; if it already has content, the old file is first backed up to a timestamped file (e.g. zones.20260101-120000.bak.json; each generation keeps its own backup) before being overwritten. If the backup fails, zones.json is left untouched. On a server this requires the \"manage mods\" permission.",

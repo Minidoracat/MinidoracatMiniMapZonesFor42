@@ -8,6 +8,8 @@
     "UI_MinidoracatMiniMapZones_TplRosewood": "示范区域：Rosewood 消防局",
     "UI_MinidoracatMiniMapZones_TplBunker": "示范区域：March Ridge 地堡",
     "UI_MinidoracatMiniMapZones_TplMultiRect": "示范：多矩形 L 形（Riverside）",
+    "UI_MinidoracatMiniMapZones_TplCatTown": "示范：城镇",
+    "UI_MinidoracatMiniMapZones_TplCatField": "示范：野外",
     "UI_MinidoracatMiniMapZones_TplDoc": "区域仅为地图显示标示，不影响任何游戏机制（本 MOD 无 PVP／安全区等功能）。以上为示范区域，可自行修改或删除。每个区域可加 \"enabled\": false 暂时隐藏而不必删除（省略视为 true）。坐标为世界 square 坐标 [x1,y1,x2,y2]（左上到右下）。直接以任何语言文字编辑皆可（文件以 UTF-8 读取）。改档后等轮询间隔或 admin 下 /reloadzones 立即生效，无需重启。",
     "UI_MinidoracatMiniMapZones_GenTemplate": "生成区域范本",
     "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "以选定语言生成含四个示范区域的 zones.json 范本并立即套用。zones.json 不存在或空白时直接写入；已有内容时，会先把旧文件备份为带时间戳的文件（如 zones.20260101-120000.bak.json，每次生成各自保留、不互相覆盖）再覆写。备份失败则不动 zones.json。在服务器上需要「管理模组」权限。",

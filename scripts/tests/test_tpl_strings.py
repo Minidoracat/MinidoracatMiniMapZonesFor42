@@ -23,6 +23,8 @@ KEYS = (
     ("rw", "UI_MinidoracatMiniMapZones_TplRosewood"),
     ("br", "UI_MinidoracatMiniMapZones_TplBunker"),
     ("ml", "UI_MinidoracatMiniMapZones_TplMultiRect"),
+    ("ct", "UI_MinidoracatMiniMapZones_TplCatTown"),
+    ("cf", "UI_MinidoracatMiniMapZones_TplCatField"),
     ("doc", "UI_MinidoracatMiniMapZones_TplDoc"),
 )
 

@@ -590,11 +590,16 @@ check("template(a): 檔缺→getTextOrNull 未載入時退 ASCII fallback，安�
     -- West Point 示範「便宜描邊」組合（ZN-1）：無框線＋halo 底襯
     assert(wp.borderAlpha == 0, "West Point 應示範 borderAlpha 0（得 " .. tostring(wp.borderAlpha) .. "）")
     assert(wp.haloAlpha == 0.5, "West Point 應示範 haloAlpha 0.5（得 " .. tostring(wp.haloAlpha) .. "）")
+    -- 類別演示：城鎮×3＋野外×1（桌面測試無 getTextOrNull → ASCII fallback 值），
+    -- 統一視窗據此長出兩個勾選；類別值須可編碼（無逗號/非 sentinel）
+    assert(wp.category == "Demo: Town", "West Point 應帶城鎮類別（得 " .. tostring(wp.category) .. "）")
     assert(wp.lodRect, "West Point（36x33）為建物尺度，應附 lodRect 進 LOD（ZN-3）")
     local rw = byFrag("Rosewood")
     assert(rw and rw.fillAlpha == 0.3, "應含 Rosewood 示範區域且 fillAlpha 0.3")
+    assert(rw.category == "Demo: Town", "Rosewood 應帶城鎮類別（得 " .. tostring(rw.category) .. "）")
     local mr = byFrag("March Ridge")
     assert(mr and mr.fillAlpha == 0.3, "應含 March Ridge 示範區域且 fillAlpha 0.3")
+    assert(mr.category == "Demo: Field", "March Ridge 地堡應帶野外類別（得 " .. tostring(mr.category) .. "）")
     -- 第四個為多矩形示範（L 形雙矩形，Riverside）＋帶 "enabled": true 展示欄位存在
     local ml = byFrag("Riverside")
     assert(ml, "應含多矩形示範區域（Riverside）")
