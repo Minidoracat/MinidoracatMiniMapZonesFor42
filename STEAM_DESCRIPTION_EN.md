@@ -16,6 +16,7 @@ and the world map.
 [h2]⚠️ Version requirement[/h2]
 [b]Requires the main MOD [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap for B42[/url] version 42.19.0-0.8.0 or later[/b] (it provides the zone-layer rendering API and the settings-page action-row API).
 If the main MOD is missing or too old, this pack silently degrades — no zones are drawn, and the main MOD's other features are unaffected.
+The 0.4.0 category filter / halo edge / zoom LOD [b]need main MOD 42.20.1-0.14.0+ for full effect[/b]; on older main MOD versions zones still display normally, just without the new effects.
 
 [h2]🧰 Features[/h2]
 [list]
@@ -24,6 +25,9 @@ If the main MOD is missing or too old, this pack silently degrades — no zones 
 [*] [b]Dual map display[/b]: correct projection and clipping on both the mini-map and the world map
 [*] [b]Toggles[/b]: the Zone layer master switch (main MOD) / a "Show server zones" per-provider switch (added to the unified settings window by the main MOD from this pack's registration, on by default) — turn it off and the whole layer stops drawing
 [*] [b]Rectangle zones[/b]: a single zone can be made of multiple rectangles to cover irregular shapes
+[*] [b]Category filter (0.4.0)[/b]: zones can carry a `category` field — players get per-category checkboxes (with select all/none) in the main MOD's "Server zones" settings section, auto-refreshing while the window is open; the template ships with "Demo: town / Demo: field" categories to show it off
+[*] [b]Dark halo edge `haloAlpha` (0.4.0)[/b]: a cheap alternative to outlines — a slightly expanded dark underlay beneath the fill keeps edges crisp at a lower draw cost
+[*] [b]Far-zoom names + zoom LOD (0.4.0)[/b]: zone names show at any zoom by default so zones are easy to find (toggleable); building-scale zones get automatic 3-tier LOD — a single union block at mid zoom, hidden when far, full detail up close
 [*] [b]Auto template & generate button[/b]: on first launch a `zones.json` template with four demo zones is generated automatically (localized to the server language); the unified settings window also offers a "Generate zones template" button with a language picker (Traditional/Simplified Chinese, English, Japanese) — a confirm dialog guards against misclicks, the existing file is first backed up to a timestamped `.bak.json`, and on servers it requires the "manage mods" permission
 [*] [b]enabled field[/b]: set `"enabled": false` on a zone to keep its coordinates but hide it temporarily — no need to delete it
 [*] [b]Fault-tolerant data[/b]: malformed or over-limit entries are skipped and logged without breaking the rest of the zones
