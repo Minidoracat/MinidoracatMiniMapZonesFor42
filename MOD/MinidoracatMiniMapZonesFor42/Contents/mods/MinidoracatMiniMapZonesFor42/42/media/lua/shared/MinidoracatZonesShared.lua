@@ -341,8 +341,12 @@ local function validateOneZone(raw, index, limits, errors)
         borderAlpha = a
     end
 
-    -- haloAlpha（選填，預設 nil＝不畫）：主 MOD fill pass 的暗色底襯描邊——細節檔
+    -- haloAlpha（選填，預設 nil＝不畫）：主 MOD fill pass 的暗色底襯描邊——
     -- 每可見矩形 1 次 drawPolygon，取代 border 的每矩形 4 次 drawLine（全縮放檔）。
+    -- 檔位（主 MOD 42.20.1-0.14.1 起）：帶 lodRect 的建物尺度區域僅細節檔畫；
+    -- 未附 lodRect 的大範圍區域（attachLodRect 的 >LOD_MAX_EDGE 側）全檔位畫
+    -- ——恆顯區域的描邊跟著填色走。0.14.0 主 MOD 為細節檔限定，行為差異僅
+    -- 大範圍區域拉遠時多描邊，屬純增益、無相容性問題。
     -- 推薦組合 "borderAlpha": 0, "haloAlpha": 0.5＝便宜描邊；預設不設不改變既有
     -- 伺服器外觀。渲染端對 nil 短路（主 MOD MinidoracatMiniMap.lua fill pass），
     -- 舊版主 MOD 讀到多餘欄位自然忽略，zoneApiVersion 不需升版
