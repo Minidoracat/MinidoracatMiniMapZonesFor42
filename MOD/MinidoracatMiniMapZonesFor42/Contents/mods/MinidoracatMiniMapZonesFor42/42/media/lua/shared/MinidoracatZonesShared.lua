@@ -80,6 +80,37 @@ local KNOWN_FIELDS = {
 
 local INF = 1 / 0
 
+-- 建物尺度 LOD 門檻（ZN-3）：區域 rects 聯集 AABB 的最長邊 <= 此值才附 lodRect
+-- 進主 MOD 三檔縮放 LOD（<1.5px/格 隱藏、<6 聯集框純填色、>=6 完整細節——框線
+-- 與名稱僅細節檔）。大範圍區域（PVP 區、城區標記——伺服器區域的主用途）不附、
+-- 維持任何縮放可見：拉遠消失會違反其「全圖展示」語意。門檻是啟發式：100 格
+-- 約當最大型建物（Louisville 商場 273 格寬不附、一般商店街區 <100 附）。
+local LOD_MAX_EDGE = 100
+
+-- 對正規化 zone 就地附 lodRect（純 Lua、每 zone 驗證/解包時一次、非每幀）。
+-- SP 路（validateZones）與 MP 路（unpackZone）都要過這裡；lodRect 刻意不進
+-- wire（client 端重算即可，不佔廣播 bytes）。空 rects 不附。
+local function attachLodRect(zone)
+    local rects = zone.rects
+    if not rects or not rects[1] then return zone end
+    local r1 = rects[1]
+    local x1, y1, x2, y2 = r1.x1, r1.y1, r1.x2, r1.y2
+    for i = 2, #rects do
+        local r = rects[i]
+        if r.x1 < x1 then x1 = r.x1 end
+        if r.y1 < y1 then y1 = r.y1 end
+        if r.x2 > x2 then x2 = r.x2 end
+        if r.y2 > y2 then y2 = r.y2 end
+    end
+    local w = x2 - x1
+    local h = y2 - y1
+    local edge = w > h and w or h
+    if edge <= LOD_MAX_EDGE then
+        zone.lodRect = { x1 = x1, y1 = y1, x2 = x2, y2 = y2 }
+    end
+    return zone
+end
+
 -- 有限數值檢查：擋 NaN（v ~= v）與 ±inf（parse_number 把 1e999 → inf）（B3）
 local function isFinite(v)
     return v == v and v ~= INF and v ~= -INF
@@ -371,6 +402,8 @@ local function validateOneZone(raw, index, limits, errors)
         category = category,
         meta = meta,
     }
+    attachLodRect(zone) -- 建物尺度才附（ZN-3）；不進 wire，不影響下方 byte 檢查
+
 
     -- B1：單 zone 的 wire 序列化 byte 超限即拒絕（含 meta/rects/字串）。與 server 分包
     -- budget 共用 wireBytes；此處拒絕保證任何進佇列的 zone 都塞得下一包，server 分包不會卡死。
@@ -486,7 +519,7 @@ function MinidoracatZonesShared.unpackZone(wire)
     end
     local fc = wire[F.fill] or { 1, 0, 0 }
     local bc = wire[F.border] or fc
-    return {
+    local zone = {
         id = wire[F.id],
         name = wire[F.name],
         rects = rects,
@@ -498,6 +531,7 @@ function MinidoracatZonesShared.unpackZone(wire)
         category = wire[F.category],
         meta = wire[F.meta],
     }
+    return attachLodRect(zone)
 end
 
 -------------------------------------------------------------------------------

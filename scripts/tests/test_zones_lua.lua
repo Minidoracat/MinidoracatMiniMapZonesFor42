@@ -70,6 +70,46 @@ check("validator: 好條目通過並正規化", function()
     assert(z.rects[1].x1 == 0 and z.rects[1].x2 == 10, "rects 正規化錯誤")
 end)
 
+check("validator: 建物尺度附 lodRect（ZN-3）——聯集/門檻/大區域不附", function()
+    -- 單矩形 40x30：附，且等於自身
+    local small = MinidoracatZonesShared.validateZones({
+        goodZone({ rects = { { 100, 100, 140, 130 } } }) }).zones[1]
+    assert(small.lodRect and small.lodRect.x1 == 100 and small.lodRect.y1 == 100
+        and small.lodRect.x2 == 140 and small.lodRect.y2 == 130,
+        "40x30 區域應附 lodRect＝自身 AABB")
+    -- 多矩形 L 形：附聯集框
+    local lshape = MinidoracatZonesShared.validateZones({
+        goodZone({ rects = { { 0, 0, 50, 20 }, { 0, 20, 30, 60 } } }) }).zones[1]
+    assert(lshape.lodRect and lshape.lodRect.x1 == 0 and lshape.lodRect.y1 == 0
+        and lshape.lodRect.x2 == 50 and lshape.lodRect.y2 == 60,
+        "L 形應附聯集 AABB (0,0)-(50,60)")
+    -- 邊界：最長邊恰 100 附、101 不附（門檻是 <=）
+    local at = MinidoracatZonesShared.validateZones({
+        goodZone({ rects = { { 0, 0, 100, 10 } } }) }).zones[1]
+    assert(at.lodRect, "最長邊恰 100 應附（<= 語意）")
+    local over = MinidoracatZonesShared.validateZones({
+        goodZone({ rects = { { 0, 0, 101, 10 } } }) }).zones[1]
+    assert(over.lodRect == nil, "最長邊 101 不得附——大範圍區域須維持全縮放可見")
+end)
+
+check("wire: lodRect 不進 wire、unpackZone 端重算（ZN-3）", function()
+    local z = MinidoracatZonesShared.validateZones({
+        goodZone({ rects = { { 5, 5, 45, 35 } } }) }).zones[1]
+    assert(z.lodRect, "前置：驗證端已附")
+    local wire = MinidoracatZonesShared.packZone(z)
+    for k in pairs(wire) do
+        assert(k ~= "lodRect" and k ~= "lr", "lodRect 不得佔廣播 bytes（發現欄位 " .. tostring(k) .. "）")
+    end
+    local rt = MinidoracatZonesShared.unpackZone(wire)
+    assert(rt.lodRect and rt.lodRect.x1 == 5 and rt.lodRect.x2 == 45,
+        "unpackZone 應重算 lodRect（MP 路徑）")
+    -- 大區域經 wire 後同樣不附
+    local big = MinidoracatZonesShared.validateZones({
+        goodZone({ rects = { { 0, 0, 200, 200 } } }) }).zones[1]
+    local brt = MinidoracatZonesShared.unpackZone(MinidoracatZonesShared.packZone(big))
+    assert(big.lodRect == nil and brt.lodRect == nil, "大區域兩路都不得附")
+end)
+
 check("validator: haloAlpha 正常值透傳、範圍 clamp、型別錯拒絕", function()
     local ok = MinidoracatZonesShared.validateZones({ goodZone({ haloAlpha = 0.5 }) })
     assert(ok.zones[1].haloAlpha == 0.5, "haloAlpha 0.5 應透傳")
@@ -539,6 +579,7 @@ check("template(a): 檔缺→getTextOrNull 未載入時退 ASCII fallback，安�
     -- West Point 示範「便宜描邊」組合（ZN-1）：無框線＋halo 底襯
     assert(wp.borderAlpha == 0, "West Point 應示範 borderAlpha 0（得 " .. tostring(wp.borderAlpha) .. "）")
     assert(wp.haloAlpha == 0.5, "West Point 應示範 haloAlpha 0.5（得 " .. tostring(wp.haloAlpha) .. "）")
+    assert(wp.lodRect, "West Point（36x33）為建物尺度，應附 lodRect 進 LOD（ZN-3）")
     local rw = byFrag("Rosewood")
     assert(rw and rw.fillAlpha == 0.3, "應含 Rosewood 示範區域且 fillAlpha 0.3")
     local mr = byFrag("March Ridge")
