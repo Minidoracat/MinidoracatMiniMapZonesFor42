@@ -70,6 +70,17 @@ check("validator: 好條目通過並正規化", function()
     assert(z.rects[1].x1 == 0 and z.rects[1].x2 == 10, "rects 正規化錯誤")
 end)
 
+check("validator: 手寫頂層 lodRect 被丟棄（計算欄位，不進 meta 不佔 wire）", function()
+    -- 使用者手寫大於門檻的假 lodRect：不得採用、不得落 meta——attachLodRect 重算為準
+    local z = MinidoracatZonesShared.validateZones({
+        goodZone({ rects = { { 0, 0, 200, 200 } }, lodRect = { x1 = 0, y1 = 0, x2 = 5, y2 = 5 } }) }).zones[1]
+    assert(z.lodRect == nil, "大區域的手寫 lodRect 應被丟棄（重算不附）")
+    assert(z.meta == nil or z.meta.lodRect == nil, "手寫 lodRect 不得落 meta 佔 wire bytes")
+    local small = MinidoracatZonesShared.validateZones({
+        goodZone({ rects = { { 0, 0, 40, 30 } }, lodRect = { x1 = 9, y1 = 9, x2 = 9, y2 = 9 } }) }).zones[1]
+    assert(small.lodRect and small.lodRect.x2 == 40, "小區域以重算值為準、非手寫值")
+end)
+
 check("validator: 建物尺度附 lodRect（ZN-3）——聯集/門檻/大區域不附", function()
     -- 單矩形 40x30：附，且等於自身
     local small = MinidoracatZonesShared.validateZones({

@@ -76,6 +76,10 @@ local KNOWN_FIELDS = {
     id = true, name = true, rects = true, fill = true, fillAlpha = true,
     border = true, borderAlpha = true, haloAlpha = true, category = true,
     meta = true, enabled = true,
+    -- lodRect 是「計算欄位」（attachLodRect 依聯集尺寸決定，不讀使用者輸入）：
+    -- 列 known 使手寫的頂層 lodRect 被靜默丟棄，而非依未知欄位規則塞進
+    -- meta.lodRect 占 wire bytes（codex review 抓出的窄例外）
+    lodRect = true,
 }
 
 local INF = 1 / 0

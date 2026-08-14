@@ -74,7 +74,7 @@
 
 ## 測試
 
-- `lua scripts/tests/test_zones_lua.lua`：99 案例（validator 上限／分包／權限守衛／
+- `lua scripts/tests/test_zones_lua.lua`：103 案例（validator 上限／分包／權限守衛／
   範本生成／備份語意／SP fallback／寫檔副檔名白名單與 legacy 遷移狀態機）
 - `python scripts/tests/test_kahlua_globals.py`：Kahlua 缺失全域（next/assert）靜態守衛
 - `python scripts/tests/test_tpl_strings.py`：四語範本常數與 UI.json 逐字鎖定
