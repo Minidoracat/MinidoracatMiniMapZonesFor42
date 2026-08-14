@@ -74,8 +74,8 @@ MinidoracatZonesShared.LIMITS = {
 -- enabled 列為 known：顯示開關由 validateZones 迴圈直接處理（見下），不透傳進 meta。
 local KNOWN_FIELDS = {
     id = true, name = true, rects = true, fill = true, fillAlpha = true,
-    border = true, borderAlpha = true, category = true, meta = true,
-    enabled = true,
+    border = true, borderAlpha = true, haloAlpha = true, category = true,
+    meta = true, enabled = true,
 }
 
 local INF = 1 / 0
@@ -306,6 +306,18 @@ local function validateOneZone(raw, index, limits, errors)
         borderAlpha = a
     end
 
+    -- haloAlpha（選填，預設 nil＝不畫）：主 MOD fill pass 的暗色底襯描邊——細節檔
+    -- 每可見矩形 1 次 drawPolygon，取代 border 的每矩形 4 次 drawLine（全縮放檔）。
+    -- 推薦組合 "borderAlpha": 0, "haloAlpha": 0.5＝便宜描邊；預設不設不改變既有
+    -- 伺服器外觀。渲染端對 nil 短路（主 MOD MinidoracatMiniMap.lua fill pass），
+    -- 舊版主 MOD 讀到多餘欄位自然忽略，zoneApiVersion 不需升版
+    local haloAlpha = nil
+    if raw.haloAlpha ~= nil then
+        local a = clampAlpha(raw.haloAlpha)
+        if not a then return fail("haloAlpha wrong type (need number)") end
+        haloAlpha = a
+    end
+
     -- category（選填；UTF-8 byte 上限，B4）
     local category = nil
     if raw.category ~= nil then
@@ -355,6 +367,7 @@ local function validateOneZone(raw, index, limits, errors)
         fillAlpha = fillAlpha,
         border = { r = borderR, g = borderG, b = borderB },
         borderAlpha = borderAlpha,
+        haloAlpha = haloAlpha,
         category = category,
         meta = meta,
     }
@@ -435,7 +448,8 @@ end
 
 MinidoracatZonesShared.FIELD = {
     id = "id", name = "n", rects = "rc", fill = "fc", fillAlpha = "fa",
-    border = "bc", borderAlpha = "ba", category = "cat", meta = "mt",
+    border = "bc", borderAlpha = "ba", haloAlpha = "ha", category = "cat",
+    meta = "mt",
 }
 
 -- 已正規化 zone（validateZones 的輸出形狀）→ wire table（短欄位名、positional 陣列）
@@ -455,6 +469,7 @@ function MinidoracatZonesShared.packZone(zone)
         [F.border] = { zone.border.r, zone.border.g, zone.border.b },
         [F.borderAlpha] = zone.borderAlpha,
     }
+    if zone.haloAlpha then wire[F.haloAlpha] = zone.haloAlpha end
     if zone.category then wire[F.category] = zone.category end
     if zone.meta then wire[F.meta] = zone.meta end
     return wire
@@ -479,6 +494,7 @@ function MinidoracatZonesShared.unpackZone(wire)
         fillAlpha = wire[F.fillAlpha],
         border = { r = bc[1], g = bc[2], b = bc[3] },
         borderAlpha = wire[F.borderAlpha],
+        haloAlpha = wire[F.haloAlpha],
         category = wire[F.category],
         meta = wire[F.meta],
     }
@@ -629,7 +645,10 @@ local DEMO_DOC_ASCII = "Zones are map display markers only -- they do not affect
 -- 共用，避免兩份座標）。四個 name 參數須「已 tplJsonEscape」。
 local function buildDemoZoneLines(wp, rw, br, ml)
     return {
-        '    { "name": "' .. wp .. '", "rects": [[11882, 6928, 11918, 6961]], "fill": "#3B82F6", "fillAlpha": 0.3, "border": "#3B82F6" },',
+        '    { "name": "' .. wp .. '", "rects": [[11882, 6928, 11918, 6961]], "fill": "#3B82F6", "fillAlpha": 0.3, "border": "#3B82F6", "borderAlpha": 0, "haloAlpha": 0.5 },',
+        -- ^ West Point 示範「便宜描邊」組合（ZN-1）：borderAlpha 0＝不畫框線（省每矩形
+        --   4 次 drawLine/幀）、haloAlpha 0.5＝主 MOD 細節檔的暗色底襯描邊（每矩形 1 次
+        --   drawPolygon）。其餘三筆維持傳統框線示範，兩種樣式玩家都看得到
         '    { "name": "' .. rw .. '", "rects": [[8123, 11723, 8163, 11757]], "fill": "#FF3B30", "fillAlpha": 0.3, "border": "#FF3B30" },',
         '    { "name": "' .. br .. '", "rects": [[9916, 12595, 9986, 12651]], "fill": "#22C55E", "fillAlpha": 0.3, "border": "#22C55E" },',
         '    { "name": "' .. ml .. '", "rects": [[6115, 5235, 6150, 5285], [6115, 5285, 6180, 5320]], "fill": "#F59E0B", "fillAlpha": 0.3, "border": "#F59E0B", "enabled": true }',

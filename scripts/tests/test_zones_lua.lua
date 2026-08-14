@@ -66,7 +66,17 @@ check("validator: 好條目通過並正規化", function()
     assert(z.id == "Test Zone", "id 未預設用 name")
     assert(z.fillAlpha == 0.25, "fillAlpha 預設值錯")
     assert(z.borderAlpha == 0.9, "borderAlpha 預設值錯")
+    assert(z.haloAlpha == nil, "haloAlpha 預設應為 nil（不畫底襯，既有伺服器外觀不變）")
     assert(z.rects[1].x1 == 0 and z.rects[1].x2 == 10, "rects 正規化錯誤")
+end)
+
+check("validator: haloAlpha 正常值透傳、範圍 clamp、型別錯拒絕", function()
+    local ok = MinidoracatZonesShared.validateZones({ goodZone({ haloAlpha = 0.5 }) })
+    assert(ok.zones[1].haloAlpha == 0.5, "haloAlpha 0.5 應透傳")
+    local clamped = MinidoracatZonesShared.validateZones({ goodZone({ haloAlpha = 7 }) })
+    assert(clamped.zones[1].haloAlpha == 1, "haloAlpha 超界應 clamp 到 1（與 fillAlpha 同嚴格度）")
+    local bad = MinidoracatZonesShared.validateZones({ goodZone({ haloAlpha = "x" }) })
+    assert(bad.count == 0 and #bad.errors == 1, "haloAlpha 型別錯應整筆拒絕")
 end)
 
 check("validator: 壞條目（缺 rects）記錯不崩潰", function()
@@ -253,8 +263,13 @@ check("wire: packZone/unpackZone round-trip", function()
     assert(roundtrip.fillAlpha == zone.fillAlpha, "fillAlpha 未保留")
     assert(math.abs(roundtrip.border.r - zone.border.r) < 1e-9, "border 未保留")
     assert(roundtrip.borderAlpha == zone.borderAlpha, "borderAlpha 未保留")
+    assert(roundtrip.haloAlpha == nil, "未設 haloAlpha 的 zone roundtrip 後應仍為 nil")
     assert(roundtrip.category == zone.category, "category 未保留")
     assert(roundtrip.meta and roundtrip.meta.expiresAt == 99, "meta 未保留")
+    -- haloAlpha wire 欄位（ha）：SP 直出與 MP 廣播兩路都要通
+    local hz = MinidoracatZonesShared.validateZones({ goodZone({ haloAlpha = 0.5 }) }).zones[1]
+    local hrt = MinidoracatZonesShared.unpackZone(MinidoracatZonesShared.packZone(hz))
+    assert(hrt.haloAlpha == 0.5, "haloAlpha 未經 wire 保留")
 end)
 
 check("wire: wireBytes 估算單一 zone 落在 maxZoneWireBytes 之內（B1 驗證器閘）", function()
@@ -521,6 +536,9 @@ check("template(a): 檔缺→getTextOrNull 未載入時退 ASCII fallback，安�
         and math.abs(wp.fill.b - 246 / 255) < 1e-9, "West Point fill 應為 #3B82F6")
     -- 範本用正式欄位名 fillAlpha（非 alpha 別名），驗其實際生效，非 fallback 到預設 0.25
     assert(wp.fillAlpha == 0.3, "West Point fillAlpha 應為範本值 0.3，得到 " .. tostring(wp.fillAlpha))
+    -- West Point 示範「便宜描邊」組合（ZN-1）：無框線＋halo 底襯
+    assert(wp.borderAlpha == 0, "West Point 應示範 borderAlpha 0（得 " .. tostring(wp.borderAlpha) .. "）")
+    assert(wp.haloAlpha == 0.5, "West Point 應示範 haloAlpha 0.5（得 " .. tostring(wp.haloAlpha) .. "）")
     local rw = byFrag("Rosewood")
     assert(rw and rw.fillAlpha == 0.3, "應含 Rosewood 示範區域且 fillAlpha 0.3")
     local mr = byFrag("March Ridge")
