@@ -1,6 +1,4 @@
 {
-    "UI_MinidoracatMiniMapZones_ServerZones": "Show server zones",
-    "UI_MinidoracatMiniMapZones_ServerZones_tooltip": "Show custom zones pushed by the server via zones.json (translucent fill + border + name). Vanilla map resource points (POI) are now built into the main MOD, not this addon.",
     "UI_MinidoracatMiniMapZones_ReloadSent": "Sent /reloadzones reload request...",
     "UI_MinidoracatMiniMapZones_ReloadResult": "Zone data reloaded (%1 zones)",
     "UI_MinidoracatMiniMapZones_ReloadFailed": "Zone data reload failed: %1",

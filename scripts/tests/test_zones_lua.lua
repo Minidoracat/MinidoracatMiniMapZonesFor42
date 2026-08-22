@@ -1907,7 +1907,12 @@ local function newClientHarness(opts)
     local state = { providerRegistered = false, actionRegistered = false,
                     handlers = {}, sent = {}, nowMs = 0 }
     local api = { zoneApiVersion = opts.apiVersion or 1 }
-    if not opts.noProvider then api.registerZoneProvider = function() state.providerRegistered = true end end
+    if not opts.noProvider then
+        api.registerZoneProvider = function(owner, fn)
+            state.providerRegistered = true
+            state.providerFn = fn -- 供案例斷言 serverZones 套用（provider 恆回快取參照）
+        end
+    end
     if not opts.noAction then api.registerZoneAction = function() state.actionRegistered = true end end
     _G.MinidoracatMiniMapAPI = api
     _G.Events = {
@@ -1956,7 +1961,7 @@ end)
 check("client(fix4): MP 逾時批次丟棄後補發 requestZones，冷卻窗內不重發", function()
     local state = newClientHarness()  -- MP
     state.nowMs = 0
-    state.handlers.onGameStart()  -- MP 分支送一次 requestZones（清掉不看）
+    state.handlers.onGameStart()  -- 修正5 起 MP 分支不直接送（進場請求交 OnTick 重送迴圈）
     state.sent = {}
     -- 批次1：tot=2 只送 seq=1 → pendingBatches 留一筆未集滿，ts=0
     state.handlers.onServerCommand("MinidoracatMiniMapZones", "zoneData",
@@ -1980,6 +1985,90 @@ check("client(fix4): MP 逾時批次丟棄後補發 requestZones，冷卻窗內�
         if call[3] == "requestZones" then req2 = req2 + 1 end
     end
     assert(req2 == 0, "冷卻窗內(<10s)不應重發 requestZones，得到 " .. req2)
+end)
+
+check("client(fix5): MP 進場請求等 onlineID 就緒＋節流重送，收到 zoneData 即停", function()
+    local state = newClientHarness()  -- MP
+    state.nowMs = 0
+    state.handlers.onGameStart()
+    -- malformed zoneData（缺 bid/seq/tot）不得停掉重試（codex review：壞包 silence
+    -- 重試＝永久空白）——header 驗證通過的包才算通路證實
+    state.handlers.onServerCommand("MinidoracatMiniMapZones", "zoneData", { junk = true })
+    assert(#state.sent == 0, "OnGameStart 不應直接送 requestZones（連線未就緒窗口），得 " .. #state.sent)
+    -- 未就緒（player 無 getOnlineID 方法 → pcall 失敗＝未就緒）：不送
+    state.handlers.onTick()
+    assert(#state.sent == 0, "onlineID 未就緒不應送出")
+    -- onlineID = -1（連線未指派）：仍不送
+    state.player.getOnlineID = function() return -1 end
+    state.nowMs = 2000
+    state.handlers.onTick()
+    assert(#state.sent == 0, "onlineID=-1 不應送出")
+    -- 就緒：送出第一發
+    state.player.getOnlineID = function() return 7 end
+    state.nowMs = 4000
+    state.handlers.onTick()
+    assert(#state.sent == 1 and state.sent[1][3] == "requestZones",
+        "就緒後應送 requestZones，得 " .. #state.sent)
+    -- 重試間隔（10s）內不重送
+    state.nowMs = 9000
+    state.handlers.onTick()
+    assert(#state.sent == 1, "重試間隔內不應重送")
+    -- 超過重試間隔：第二發
+    state.nowMs = 15000
+    state.handlers.onTick()
+    assert(#state.sent == 2, "超過重試間隔應重送，得 " .. #state.sent)
+    -- 收到任一 zoneData 包（未集滿也算通路證實）→ 停止重送
+    state.handlers.onServerCommand("MinidoracatMiniMapZones", "zoneData",
+        { bid = 1, seq = 1, tot = 2, count = 0, zones = {} })
+    state.nowMs = 60000
+    state.handlers.onTick()
+    assert(#state.sent == 2, "收到 zoneData 後不應再重送，得 " .. #state.sent)
+end)
+
+check("client(fix5): server 無回應時送滿上限即放棄，不無限重送", function()
+    local state = newClientHarness()
+    state.player.getOnlineID = function() return 7 end
+    state.nowMs = 0
+    state.handlers.onGameStart()
+    for i = 1, 40 do
+        state.nowMs = i * 11000  -- 每輪都超過重試間隔
+        state.handlers.onTick()
+    end
+    local reqs = 0
+    for _, call in ipairs(state.sent) do
+        if call[3] == "requestZones" then reqs = reqs + 1 end
+    end
+    assert(reqs == 12, "應恰送滿上限 12 次後放棄，得 " .. reqs)
+end)
+
+check("client(fix5): 同 process 重登（OnGameStart 重入）重置 satisfied，重試迴圈重新啟動", function()
+    local state = newClientHarness()
+    state.player.getOnlineID = function() return 7 end
+    state.nowMs = 0
+    state.handlers.onGameStart()
+    state.nowMs = 1000
+    state.handlers.onTick()
+    state.handlers.onServerCommand("MinidoracatMiniMapZones", "zoneData",
+        { bid = 5, seq = 1, tot = 1, count = 0, zones = {} }) -- 前場套用 bid=5
+    -- 重登：Lua 不重載、module state 殘留——OnGameStart 必須歸零 mpReq*（review 抓出：
+    -- satisfied 殘留 true 會讓重試永不啟動＝重現「重登後整場空白」）
+    state.sent = {}
+    state.handlers.onGameStart()
+    state.nowMs = 5000
+    state.handlers.onTick()
+    local reqs = 0
+    for _, call in ipairs(state.sent) do
+        if call[3] == "requestZones" then reqs = reqs + 1 end
+    end
+    assert(reqs == 1, "重登後重試迴圈應重新啟動並送出請求，得 " .. reqs)
+    -- server 重啟過（batchCounter 歸零）：新全量 bid 可 ≤ 前場已套用值——D3 歸零
+    -- lastAppliedBid 保證不被判 stale（拿掉歸零＝bid=1 被拒、satisfied 已設、重試
+    -- 停止＝原 bug 全綠復現；本斷言以 provider 參照變化證明全量真的套用）
+    local before = state.providerFn()
+    state.handlers.onServerCommand("MinidoracatMiniMapZones", "zoneData",
+        { bid = 1, seq = 1, tot = 1, count = 0, zones = {} })
+    assert(state.providerFn() ~= before,
+        "重登後 server 重啟的低 bid 全量應被套用（lastAppliedBid 未歸零＝被判 stale）")
 end)
 
 -------------------------------------------------------------------------------

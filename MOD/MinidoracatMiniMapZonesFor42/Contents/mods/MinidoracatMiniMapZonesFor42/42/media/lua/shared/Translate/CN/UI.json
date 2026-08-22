@@ -1,6 +1,4 @@
 {
-    "UI_MinidoracatMiniMapZones_ServerZones": "显示服务器区域",
-    "UI_MinidoracatMiniMapZones_ServerZones_tooltip": "显示服务器通过 zones.json 推送的自定义区域（半透明填色＋边框＋名称）。原版地图资源点（POI）已内置于主 MOD，不在本 addon。",
     "UI_MinidoracatMiniMapZones_ReloadSent": "已发送 /reloadzones 重新加载请求…",
     "UI_MinidoracatMiniMapZones_ReloadResult": "区域数据已重新加载（%1 个区域）",
     "UI_MinidoracatMiniMapZones_ReloadFailed": "区域数据重新加载失败：%1",

@@ -4,8 +4,9 @@
 --
 -- 純自訂區域定位：內建 POI（原版地圖資源點）已於 0.8.0 搬進主 MOD 本體
 -- MinidoracatMiniMapFor42，本 addon 不再處理 POI。本檔「只出資料」：所有繪製
--- （填色/框線/名稱/投影/裁切）都在主 MOD。母開關「顯示伺服器區域」由主 MOD 依
--- registerZoneProvider 第三參 optionLabelKey 動態追加於統一視窗（本檔不再自建 ModOptions）。
+-- （填色/框線/名稱/投影/裁切）都在主 MOD。顯示開關＝主 MOD「顯示自訂區域圖層」
+-- 總開關（0.5.0 起不再傳 optionLabelKey 註冊 per-provider 母開關——本包是家族
+-- 唯一 zone provider，母開關與總開關作用重疊；本檔不自建 ModOptions）。
 --
 -- 引擎 API 佐證（禁止憑記憶寫 PZ Lua）：
 --   Events.OnServerCommand 簽名 (module, command, args)＝ServerCommands.lua:183/194，
@@ -47,6 +48,25 @@ local chatHookInstalled = false
 local STALE_REREQUEST_COOLDOWN_MS = 10000
 local lastStaleRequestMs = 0
 
+-- 修正5（0.5.0；正式服實證）：MP 進場請求不能只在 OnGameStart 送一次——OnGameStart
+-- （IngameState.java:761）時 MP 連線未必就緒：sendPlayerConnect／onlineId 等待在
+-- :764-767、GameClient.ingame 要到 UpdateStuff()（:563）才 true，此窗口的
+-- sendClientCommand 可能靜默 no-op；而唯一補發機制（EveryOneMinute stale 清理）
+-- 只在「收到過部分分包」時觸發——初始請求丟失時 pendingBatches 恆空、永不補發
+-- ＝整場空區域。正式服實證：server log「loaded 186 zone(s)」正常、client 端零
+-- zoneData；生成範本／/reloadzones 當場看得到（走 server 主動廣播、不依賴本請求），
+-- 重登即消失（走本請求）。修法沿主 MOD SteamIdReport 先例（同款 OnGameStart no-op
+-- 坑，含反編譯考證）：OnTick 等 getOnlineID() ~= -1（連線已指派）才送、
+-- REQ_RETRY_MS 節流重送，收到任一 zoneData 包即停（通路證實；分包不齊由既有
+-- stale 補發兜底），用盡 REQ_MAX_TRIES 放棄並 log（server 未裝本包時不無限重送）。
+local REQ_WAIT_MS = 1000    -- 未就緒時的檢查間隔（別每 tick 都探）
+local REQ_RETRY_MS = 10000  -- 已送出後的重試間隔（> server 端 3s per-player 冷卻）
+local REQ_MAX_TRIES = 12    -- 送出上限（約 2 分鐘）
+local mpReqTries = 0
+local mpReqNextMs = 0
+local mpReqSatisfied = false
+local mpReqGaveUp = false
+
 -- SP fallback 狀態（US-006 定案：真 SP 下 server round-trip 不可能成立，見下方
 -- spReadRawZones/spPollNow 區塊的完整證據註解）。spFallbackActive 於 OnGameStart 判定後
 -- 定值，之後不再變動；spXxx 輪詢節奏變數僅在 spFallbackActive 為真時被讀寫。
@@ -87,7 +107,7 @@ end
 
 -- 契約 C2：providerFn 每幀被主 MOD 呼叫（世界＋小地圖 ×2），只回快取參照，不重建。
 -- serverZones 於分包集滿 / SP 讀檔時整體原子替換，故直接回傳即為穩定快取；
--- 「顯示伺服器區域」母開關由主 MOD 端 gate（關＝渲染時整個 provider 跳過），本檔不再過濾。
+-- 顯示開關由主 MOD「顯示自訂區域圖層」總開關 gate（關＝渲染時跳過），本檔不再過濾。
 local function zoneProvider()
     return serverZones
 end
@@ -107,6 +127,14 @@ local function handleZoneData(args)
     -- tot 整數且合理上限；seq 整數且落在 1..tot（擋 seq=99/tot=1 套空集）
     if tot ~= math.floor(tot) or tot < 1 or tot > MAX_BATCH_PACKETS then return end
     if seq ~= math.floor(seq) or seq < 1 or seq > tot then return end
+    -- 修正5：header 驗證通過的 zoneData（含下方被拒的舊 bid 重放——結構合法即證明
+    -- 通路）＝停止進場重送；malformed 包不算——server 版本不匹配／惡意 server 送
+    -- 壞包時不得 silence 重試（codex review）。分包不齊由既有 STALE 重請求兜底。
+    -- stale 拒絕路徑設 satisfied 安全的不變式：lastAppliedBid > 0 ⟹ 本 session 已
+    -- 成功套用過一次全量（lastAppliedBid 僅於集滿套用時寫入、OnGameStart 歸零）⟹
+    -- serverZones 已有資料、重試目的已達成——「stale 拒絕且尚無全量」組合不可達；
+    -- 若日後改動 D3 歸零或 lastAppliedBid 寫入時機，須重新評估此行位置
+    mpReqSatisfied = true
     -- 拒絕已套用的舊/重放 bid（無序封包時舊 bid 不得覆蓋新全量）
     if bid <= lastAppliedBid then return end
 
@@ -397,11 +425,13 @@ end
 
 --------------------------------------------------------------------------------
 -- 掛載：註冊 provider（檔載時即註冊，早於主 MOD OnGameBoot 對 provider 數的檢查）＋事件。
--- 第三參 optionLabelKey＝「顯示伺服器區域」：主 MOD 據此於統一視窗動態追加一顆 per-provider
--- 母開關（關＝渲染時整個跳過本 provider），取代舊本檔自建的 ServerZones ModOptions 選項。
+-- 0.5.0 起不傳第三參 optionLabelKey：per-provider 母開關「顯示伺服器區域」與主 MOD
+-- 「顯示自訂區域圖層」總開關作用 100% 重疊（本包是家族唯一 zone provider），兩顆
+-- 相鄰的等效開關造成困惑（實測回饋）。不傳＝主 MOD 不生成該開關、渲染閘恆過；
+-- 玩家舊 ini 的 ZoneProv_ 值自然失效（選項不存在＝讀預設 true）。主 MOD 機制保留，
+-- 日後需要單獨開關時傳回鍵即可（屆時舊 ini 值會復活生效，需一併評估）。
 --------------------------------------------------------------------------------
-MinidoracatMiniMapAPI.registerZoneProvider(OWN_MOD_ID, zoneProvider,
-    "UI_MinidoracatMiniMapZones_ServerZones")
+MinidoracatMiniMapAPI.registerZoneProvider(OWN_MOD_ID, zoneProvider)
 
 -- 設定頁「生成範例檔」列（主 MOD 於「圖層顯示」伺服器區域 tick 之後渲染 [combo]+[按鈕]）。
 -- registerZoneAction 由檔頭 C1 版本守衛保證存在（0.8.0 完整 zone API），此處直接註冊。
@@ -456,8 +486,34 @@ Events.OnServerCommand.Add(function(module, command, args)
 end)
 
 -- SP fallback 的 <60s 輪詢秒級計時掛在 OnTick（同 server 檔 onTick 的
--- pollIntervalSeconds<60 分支做法）。MP 下此 handler 每幀 O(1) 早退。
+-- pollIntervalSeconds<60 分支做法）。MP 下 SP 分支每幀 O(1) 早退。
 Events.OnTick.Add(function()
+    -- 修正5：MP 進場請求重送迴圈（satisfied/gaveUp 後每幀一個布林早退）。
+    -- getOnlineID 以 pcall 防禦（先例 SteamIdReport.lua:94——方法缺席/例外＝未就緒）
+    if not spFallbackActive and not mpReqSatisfied and not mpReqGaveUp then
+        local now = getTimestampMs()
+        if now >= mpReqNextMs then
+            local player = getPlayer()
+            local onlineId = nil
+            if player then
+                local okId, v = pcall(function() return player:getOnlineID() end)
+                if okId and type(v) == "number" then onlineId = v end
+            end
+            if onlineId and onlineId ~= -1 then
+                if mpReqTries >= REQ_MAX_TRIES then
+                    mpReqGaveUp = true
+                    log("requestZones got no reply after " .. mpReqTries
+                        .. " tries (server missing this addon or older version?)")
+                else
+                    mpReqTries = mpReqTries + 1
+                    mpReqNextMs = now + REQ_RETRY_MS
+                    sendClientCommand(player, MODULE, "requestZones", {})
+                end
+            else
+                mpReqNextMs = now + REQ_WAIT_MS
+            end
+        end
+    end
     -- D4：SP 輪詢一律用 wall-clock 現實秒（getTimestampMs），不用 EveryOneMinute 遊戲分鐘
     if spFallbackActive then
         local now = getTimestampMs()
@@ -498,9 +554,15 @@ end)
 Events.OnGameStart.Add(function()
     -- D3：跨世界/切伺服器重置——serverZones、未完成批次、變化偵測基準、lastAppliedBid 全在
     -- module scope，不清會殘留前一世界 zones 或讓新伺服器的低 bid 被 lastAppliedBid 拒收。
+    -- 修正5 的 mpReq* 一併歸零：client Lua 回主選單再進伺服器不重載（同 process 重登），
+    -- satisfied 殘留 true 會讓重試迴圈永不啟動＝重現「重登後整場空白」（review 抓出）
     serverZones = {}
     pendingBatches = {}
     lastAppliedBid = 0
+    mpReqTries = 0
+    mpReqNextMs = 0
+    mpReqSatisfied = false
+    mpReqGaveUp = false
     spLastLen = nil
     spLastHash = nil
     spOversizeReported = false
@@ -532,11 +594,9 @@ Events.OnGameStart.Add(function()
         spPollNow(true)
         log("SP fallback active, local poll interval " .. spPollIntervalSeconds .. "s")
     else
-        -- MP：進場請求當前全量（server 端 requestZones handler 對新進玩家送全量，AC-1）。
-        local player = getPlayer()
-        if player then
-            sendClientCommand(player, MODULE, "requestZones", {})
-        end
+        -- MP：進場全量請求交給 OnTick 重送迴圈（修正5，見狀態區註解——OnGameStart
+        -- 此刻連線未必就緒、單發 sendClientCommand 可能靜默 no-op；server 端
+        -- requestZones handler 對新進玩家送全量，AC-1）
     end
 
     -- /reloadzones 聊天攔截（此時 ISChat live instance 已建立，一併補綁 textEntry）

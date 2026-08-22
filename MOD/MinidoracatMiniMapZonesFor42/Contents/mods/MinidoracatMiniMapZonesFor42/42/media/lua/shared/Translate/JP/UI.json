@@ -1,6 +1,4 @@
 {
-    "UI_MinidoracatMiniMapZones_ServerZones": "サーバーゾーンを表示",
-    "UI_MinidoracatMiniMapZones_ServerZones_tooltip": "サーバーが zones.json 経由で配信するカスタムゾーン（半透明の塗り＋枠線＋名称）を表示します。バニラマップの資源ポイント（POI）は本体 MOD に内蔵され、この addon には含まれません。",
     "UI_MinidoracatMiniMapZones_ReloadSent": "/reloadzones の再読み込み要求を送信しました…",
     "UI_MinidoracatMiniMapZones_ReloadResult": "ゾーンデータを再読み込みしました（%1 個のゾーン）",
     "UI_MinidoracatMiniMapZones_ReloadFailed": "ゾーンデータの再読み込みに失敗しました：%1",

@@ -10,6 +10,10 @@ AGENTS.md
 .code-review-graph/
 .gitnexus/
 
+# Workshop 上傳工具輸入（產物：scripts/gen_workshop.py 由 STEAM_DESCRIPTION_EN.md 生成；
+# 遊戲上傳後會回寫本檔——不入版控使回寫不髒工作樹，同主 MOD 慣例）
+MOD/MinidoracatMiniMapZonesFor42/workshop.txt
+
 # Python（scripts/ 下的驗證與產生器腳本）
 __pycache__/
 *.pyc
