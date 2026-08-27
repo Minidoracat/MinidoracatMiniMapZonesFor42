@@ -52,9 +52,6 @@
 [h2]💬 問題回報 & 交流[/h2]
 [url=https://discord.gg/Gur2V67]👉 點此加入 Discord 伺服器[/url]
 
-[h2]📺 關注作者[/h2]
-[url=https://www.twitch.tv/minidoracat]🎬 Twitch 直播頻道[/url]
-
 [b]#地圖 #小地圖 #minimap #worldmap #Minidoracat[/b]
 
 Workshop ID: 3768276209
