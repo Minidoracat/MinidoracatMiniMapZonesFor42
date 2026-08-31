@@ -83,44 +83,6 @@ end
 -- djb2 hash 移至 MinidoracatZonesShared.djb2（client SP fallback 本地輪詢共用同一份，
 -- US-006 SP fallback 新增；見 shared 檔尾段），本檔不再自帶一份。
 
--- 讀 sandbox（min 10 / max 3600 / default 60，見 sandbox-options.txt）；nil-safe＋clamp
-local function getPollInterval()
-    local sb = SandboxVars and SandboxVars.MinidoracatMiniMapZones
-    local v = sb and sb.PollIntervalSeconds
-    if type(v) ~= "number" then return 60 end
-    if v < 10 then return 10 end
-    if v > 3600 then return 3600 end
-    return v
-end
-
--- 讀 zones.json 原始字串。回傳值三態：
---   string → 檔案內容（可能 ""）；nil → 檔不存在（合法空集）；false → 超過 1MB（放棄本輪）
--- 邊讀邊累加長度、超 maxFileBytes 立即放棄（防外部無界輸入把整檔灌進記憶體）。
-local function readRawZones()
-    local path = MinidoracatZonesShared.zonesPath()
-    local reader = getFileReader(path, false)
-    if not reader then return nil end  -- 檔不存在＝合法空集
-    local maxBytes = MinidoracatZonesShared.LIMITS.maxFileBytes
-    local parts = {}
-    local total = 0
-    while true do
-        local line = reader:readLine()
-        if line == nil then break end
-        -- C3：單行即超限就放棄（minified 單行 JSON 不讓它繞過 size gate）；
-        -- 逐行累加也擋多行超大檔。log 移到 pollNow（log-once），此處只回 false。
-        -- 位元組估用 UTF-8 byte（非 code unit #）：CJK 名稱多的檔以真實 byte 計，貼近檔案大小。
-        local lineBytes = MinidoracatZonesShared.utf8ByteLen(line)
-        total = total + lineBytes + 1  -- +1 補 readLine 去掉的換行
-        if lineBytes > maxBytes or total > maxBytes then
-            reader:close()
-            return false
-        end
-        parts[#parts + 1] = line
-    end
-    reader:close()
-    return table.concat(parts, "\n")
-end
-
 local function nextBid()
     batchCounter = batchCounter + 1
     return batchCounter
@@ -204,10 +166,12 @@ end
 -- 讀檔 → 變化偵測 → decode → validate → 更新快取 → 廣播。
 -- force=true（admin /reloadzones）無視 hash 強制重讀。回 { ok, count, errors }。
 local function pollNow(force)
-    local raw = readRawZones()
+    -- 讀 zones.json（shared readFileCapped，單一 size-gate 實作）。三態：
+    -- string＝內容（可能 ""）；nil＝檔不存在（合法空集）；false＝超過 1MB（放棄本輪）
+    local raw = MinidoracatZonesShared.readFileCapped(MinidoracatZonesShared.zonesPath())
     if raw == false then
         -- 超大檔：放棄本輪、不動快取/hash（外部修檔後長度變→下輪自然重試）。
-        -- C3：log-once，避免每輪重複刷 console（檔案修好後 readRawZones 回非 false 才復位旗標）
+        -- C3：log-once，避免每輪重複刷 console（檔案修好後讀檔回非 false 才復位旗標）
         if not oversizeReported then
             log("zones.json exceeds " .. MinidoracatZonesShared.LIMITS.maxFileBytes
                 .. " bytes limit, load aborted (same state not logged again)")
@@ -335,7 +299,7 @@ end
 -- 首次載入：OnServerStarted（server-only 啟動 event）暖快取＋掛輪詢
 Events.OnServerStarted.Add(function()
     if not isServer() then return end
-    pollIntervalSeconds = getPollInterval()
+    pollIntervalSeconds = MinidoracatZonesShared.getPollInterval()
     lastPollMs = getTimestampMs()
     -- Task 3：範本生成前先修正原版 init 排序 quirk，讓刪檔重生的範本用正確語系（繁中）而非
     -- 被卡死的 EN fallback（見上方 resyncTranslatorLanguage 註解與反編譯佐證）。

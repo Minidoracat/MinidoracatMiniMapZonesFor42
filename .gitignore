@@ -17,6 +17,7 @@ MOD/MinidoracatMiniMapZonesFor42/workshop.txt
 # Python（scripts/ 下的驗證與產生器腳本）
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # 系統檔案
 .DS_Store

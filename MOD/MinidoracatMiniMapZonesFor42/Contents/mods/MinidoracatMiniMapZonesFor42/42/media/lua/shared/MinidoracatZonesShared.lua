@@ -181,9 +181,7 @@ end
 
 -- 公開：估一個 wire table 的序列化 byte 數（server 分包 budget 用，見 enqueueFullSync）。
 -- validator（validateOneZone）與 server 分包共用此函式＝「三處同一套 byte 計算」。
-function MinidoracatZonesShared.wireBytes(wire)
-    return estimateWireBytes(wire)
-end
+MinidoracatZonesShared.wireBytes = estimateWireBytes
 
 -- 顏色：hex "#RRGGBB" 或 {r,g,b}（0-1 或 0-255，任一分量 >1 即判定整組是 0-255）。
 -- 格式錯（非字串/非 table、hex 長度或十六進位錯、分量非 number）回傳 nil。
@@ -557,6 +555,17 @@ function MinidoracatZonesShared.djb2(str)
     return h
 end
 
+-- 讀 sandbox 輪詢間隔（min 10 / max 3600 / default 60，見 sandbox-options.txt）；
+-- nil-safe＋clamp。server（OnServerStarted）與 client SP fallback（OnGameStart）共用。
+function MinidoracatZonesShared.getPollInterval()
+    local sb = SandboxVars and SandboxVars.MinidoracatMiniMapZones
+    local v = sb and sb.PollIntervalSeconds
+    if type(v) ~= "number" then return 60 end
+    if v < 10 then return 10 end
+    if v > 3600 then return 3600 end
+    return v
+end
+
 -------------------------------------------------------------------------------
 -- 範本：Zomboid/Lua/MinidoracatMiniMapZones/zones.json。兩種入口——
 --   ensureZonesTemplate（首次啟動，檔不存在→含四個示範區域，玩家照著改）；
@@ -750,7 +759,9 @@ end
 -- 回傳 string＝內容（行以 "\n" 接回）／nil＝getFileReader 回 nil／false＝超過上限。
 -- ⚠ 這裡的 nil **不等於「檔不存在」**——42.20 getFileReader 對「不存在」與「存在但開檔
 -- IOException」都回 null。需要區分者一律用 readFileCappedStrict（見下），別直接吃這個 nil。
--- ponytail: 行終止符不保留（readLine 拿不到），同 server/client readRawZones 的既知限制。
+-- ponytail: 行終止符不保留（readLine 拿不到）——寫回/驗證端一律以 "\n" 接回為準。
+-- 公開：server pollNow 與 client spPollNow 讀 zones.json 也走此函式（三態＋1MB gate
+-- 單一實作；string 可能 ""＝存在但空檔）。
 local function readFileCapped(path)
     local reader = getFileReader(path, false)
     if not reader then return nil end
@@ -766,6 +777,7 @@ local function readFileCapped(path)
     reader:close()
     return table.concat(parts, "\n")
 end
+MinidoracatZonesShared.readFileCapped = readFileCapped
 
 -- 把檔案清空（Lua 無刪檔 API；getFileWriter append=false 即 truncate，42.20.2 反編譯
 -- LuaManager.java:6753 FileOutputStream(outFile, append)）。空檔在 probeFileContent
@@ -859,7 +871,7 @@ local function migrateLegacyZonesBody()
     if probeFileContent(markerPath()) ~= nil or fileExists(markerPath()) ~= false then return "none" end
     local jsonPath = MinidoracatZonesShared.zonesPath()
     local legacyPath = MinidoracatZonesShared.zonesLegacyPath()
-    -- 讀 legacy（帶 1MB 上限，同 readRawZones 語意：外部檔＝信任邊界，不無界吃記憶體）。
+    -- 讀 legacy（帶 1MB 上限，同 readFileCapped 語意：外部檔＝信任邊界，不無界吃記憶體）。
     -- strict：false＝超限**或存在但打不開**（不寫 marker，回 false 下次啟動重試——否則
     -- legacy 永不遷移）；nil＝確定不存在。
     local content = readFileCappedStrict(legacyPath)
@@ -1059,7 +1071,7 @@ end
 -- 全段 pcall（組字/decode/IO 任一失敗都回 ok=false 不炸呼叫端；桌面測試對 CJK \u 的
 -- string.char range-error 亦於此被吞成 ok=false）。
 -- ponytail: 備份經 readLine 逐行 concat("\n") 還原，為「逐行內容一致」（JSON 可還原），行尾符/CRLF
---   不保留——Kahlua 無讀原始位元組的 API，且既有 readRawZones 亦同限制。
+--   不保留——Kahlua 無讀原始位元組的 API，同 readFileCapped 的既知限制。
 function MinidoracatZonesShared.generateTemplateForLanguage(langCode)
     local ok, result = pcall(function()
         local wp, rw, br, ml, ct, cf, doc

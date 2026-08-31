@@ -1690,7 +1690,7 @@ check("server(task1): 執行期檔案消失 → pollNow 重生空範本恰一次
     local player = { getRole = function() return { hasCapability = function() return true end } end }
     state.handlers.onClientCommand("MinidoracatMiniMapZones", "reloadZones", player, {})
 
-    -- 恰重生一次（reloadZones→pollNow(true)→readRawZones nil→ensureZonesTemplateEmpty→getFileWriter 一次）
+    -- 恰重生一次（reloadZones→pollNow(true)→readFileCapped nil→ensureZonesTemplateEmpty→getFileWriter 一次）
     assert(state.writerCalls == 1, "檔案消失應重生空範本恰一次，得到 " .. state.writerCalls)
     -- 寫出的內容 decode 後為 0 區域＋含 _doc
     local raw = table.concat(state.written, "")
@@ -1726,7 +1726,7 @@ check("server(task1-ws): runtime 全空白內容 → 視同空集 count=0，不 
         "全空白內容應視同空集 count=0 ok=true，得到 ok=" .. tostring(reloadResult and reloadResult.ok)
         .. " count=" .. tostring(reloadResult and reloadResult.count))
     assert(#reloadResult.errors == 0, "全空白不應產生 parse error，得到 " .. #reloadResult.errors .. " 筆")
-    -- 檔案「存在但空白」非「不存在」→ 不觸發空範本重生（只有 readRawZones 回 nil 才重生）
+    -- 檔案「存在但空白」非「不存在」→ 不觸發空範本重生（只有 readFileCapped 回 nil 才重生）
     assert(state.writerCalls == writerBefore,
         "全空白（檔案存在）不應觸發空範本重生，得到 " .. (state.writerCalls - writerBefore) .. " 次額外寫入")
 end)

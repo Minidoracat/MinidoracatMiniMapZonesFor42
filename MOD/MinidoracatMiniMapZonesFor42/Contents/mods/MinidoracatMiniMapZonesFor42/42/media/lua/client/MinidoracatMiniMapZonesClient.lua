@@ -246,45 +246,20 @@ end
 --   （LuaManager.java 全文查無 setExposed(SinglePlayerServer)）。故 SP 下
 --   sendClientCommand(requestZones/reloadZones) 送得出去，但伺服器端 sendServerCommand
 --   廣播永遠到不了 Lua——OnServerCommand 在 SP 不會為此觸發，只能本地讀檔。
--- 讀檔路徑／1MB 早退／變化偵測邏輯照抄主 MOD server 檔
--- MinidoracatMiniMapZonesServer.lua 的 readRawZones/pollNow（getFileReader 出處
+-- 讀檔（1MB 早退、三態）＝shared readFileCapped、hash＝shared djb2、輪詢間隔＝shared
+-- getPollInterval——與 server 檔 pollNow 共用同一份實作（getFileReader 出處
 -- LuaManager.java:5919-5950（無副檔名白名單），root＝Zomboid/Lua/，兩端同一路徑
--- ＝MinidoracatZonesShared.zonesPath()）；hash 用共用的
--- MinidoracatZonesShared.djb2（server 檔已改呼叫同一函式，見該檔沿用註解）。
+-- ＝MinidoracatZonesShared.zonesPath()）。
 --------------------------------------------------------------------------------
-
--- 讀 zones.json 原始字串；三態同 server 端：nil=不存在(合法空集)、false=超過上限、string=內容
-local function spReadRawZones()
-    local path = MinidoracatZonesShared.zonesPath()
-    local reader = getFileReader(path, false)
-    if not reader then return nil end
-    local maxBytes = MinidoracatZonesShared.LIMITS.maxFileBytes
-    local parts = {}
-    local total = 0
-    while true do
-        local line = reader:readLine()
-        if line == nil then break end
-        -- C3：單行即超限就放棄（minified 單行 JSON 不繞過 gate）；log 移到 spPollNow（log-once）。
-        -- 位元組估用 UTF-8 byte（非 code unit #），與 server readRawZones 一致。
-        local lineBytes = MinidoracatZonesShared.utf8ByteLen(line)
-        total = total + lineBytes + 1
-        if lineBytes > maxBytes or total > maxBytes then
-            reader:close()
-            return false
-        end
-        parts[#parts + 1] = line
-    end
-    reader:close()
-    return table.concat(parts, "\n")
-end
 
 -- force=true（/reloadzones 本地觸發）無視 hash 強制重讀。讀到即直接原子替換
 -- serverZones＋標髒——重用既有 merged 快取重建路徑（時點 a，同 handleZoneData 集滿套用）。
 -- 回傳 {ok, count, errors} 供 spReloadNow 接給既有 handleReloadResult 顯示路徑。
 local function spPollNow(force)
-    local raw = spReadRawZones()
+    -- 三態：string＝內容；nil＝不存在（合法空集）；false＝超過 1MB（放棄本輪）
+    local raw = MinidoracatZonesShared.readFileCapped(MinidoracatZonesShared.zonesPath())
     if raw == false then
-        -- C3：log-once，避免每輪重複刷 console（檔案修好後 spReadRawZones 回非 false 才復位旗標）
+        -- C3：log-once，避免每輪重複刷 console（檔案修好後讀檔回非 false 才復位旗標）
         if not spOversizeReported then
             log("zones.json exceeds " .. MinidoracatZonesShared.LIMITS.maxFileBytes
                 .. " bytes limit (SP fallback), load aborted (same state not logged again)")
@@ -370,17 +345,6 @@ function MinidoracatZonesClient_GenerateTemplate(langCode)
         end
         showLocalNote(getText("UI_MinidoracatMiniMapZones_GenSent"))
     end
-end
-
--- 讀 sandbox（min 10 / max 3600 / default 60，同 sandbox-options.txt／server 檔
--- getPollInterval，nil-safe＋clamp 手法一致）
-local function spGetPollInterval()
-    local sb = SandboxVars and SandboxVars.MinidoracatMiniMapZones
-    local v = sb and sb.PollIntervalSeconds
-    if type(v) ~= "number" then return 60 end
-    if v < 10 then return 10 end
-    if v > 3600 then return 3600 end
-    return v
 end
 
 --------------------------------------------------------------------------------
@@ -574,7 +538,7 @@ Events.OnGameStart.Add(function()
     if spFallbackActive then
         -- SP：requestZones 送出後沒有 Lua 可及的回程（見 spPollNow 區塊證據），
         -- 改為本地首次讀取＋掛本地輪詢節奏。
-        spPollIntervalSeconds = spGetPollInterval()
+        spPollIntervalSeconds = MinidoracatZonesShared.getPollInterval()
         spLastPollMs = getTimestampMs()
         -- 0.2.0→0.3.0 一次性 legacy 遷移的可見性 log（遷移本體在 ensureZonesTemplate 內
         -- 也會跑，session 快取使真實 IO 只執行一次；與 server 端 log 對稱）
