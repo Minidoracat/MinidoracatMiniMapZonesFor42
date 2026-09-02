@@ -1,5 +1,13 @@
 # Changelog
 
+## [42.20.1-0.5.1] - 2026-09-03
+
+### 變更
+
+- 相容性前置：主 MOD 之後為區域功能追加新能力（版本號往上加）時，本包不再因版本號「不相等」而整包安靜停用；目前主 MOD 版本下行為完全不變，可與現有任何主 MOD 版本搭配
+
+> 技術要點：`MinidoracatMiniMapZonesClient.lua` 檔頭守衛 `zoneApiVersion == 1` 改為 `type(...) == "number" and >= 1`（先驗型別：nil 與數字比較會拋錯），log 訊息同步為 `zone API >= 1`；`test_zones_lua.lua` Section C 舊案例「apiVersion=2 → 降級」與新契約矛盾，改為 =2 仍註冊／=0 降級／=false 降級不拋錯三案例。規範與契約見主 MOD `docs/addon-api.md`（addon 守衛規範：版本欄位一律 `>=`）。
+
 ## [42.20.1-0.5.0] - 2026-08-22
 
 ### 修復
