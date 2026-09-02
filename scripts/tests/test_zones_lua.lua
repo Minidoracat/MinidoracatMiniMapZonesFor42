@@ -1901,12 +1901,16 @@ end)
 local clientDir = repoRoot ..
     "/MOD/MinidoracatMiniMapZonesFor42/Contents/mods/MinidoracatMiniMapZonesFor42/42/media/lua/client"
 
--- opts: { noProvider, noAction, apiVersion(預設1), isSP }。預設＝完整 0.8.0 API＋MP。
+-- opts: { noProvider, noAction, apiVersion(預設1；false＝非數字型別案例), isSP }。
+-- 預設＝完整 zone API＋MP。
 local function newClientHarness(opts)
     opts = opts or {}
     local state = { providerRegistered = false, actionRegistered = false,
                     handlers = {}, sent = {}, nowMs = 0 }
-    local api = { zoneApiVersion = opts.apiVersion or 1 }
+    -- 不用 `or 1`：apiVersion=false（型別錯案例）會被 or 換成 1
+    local apiVersion = opts.apiVersion
+    if apiVersion == nil then apiVersion = 1 end
+    local api = { zoneApiVersion = apiVersion }
     if not opts.noProvider then
         api.registerZoneProvider = function(owner, fn)
             state.providerRegistered = true
@@ -1938,7 +1942,7 @@ local function newClientHarness(opts)
     return state
 end
 
-check("client(fix2): 完整 0.8.0 zone API（provider＋action＋zoneApiVersion==1）→ 註冊 provider＋action", function()
+check("client(fix2): 完整 zone API（provider＋action＋zoneApiVersion>=1）→ 註冊 provider＋action", function()
     local state = newClientHarness()
     assert(state.providerRegistered, "完整 API 應註冊 provider")
     assert(state.actionRegistered, "完整 API 應註冊 action")
@@ -1952,9 +1956,22 @@ check("client(fix2): 缺 registerZoneAction → C1 守衛降級，不註冊 prov
     assert(state.handlers.onGameStart == nil, "降級應早退，不掛任何事件")
 end)
 
-check("client(fix2): zoneApiVersion≠1 → 守衛降級不註冊", function()
+check("client: zoneApiVersion 高於所需（additive 升版）→ 仍正常註冊，不得安靜停用", function()
     local state = newClientHarness({ apiVersion = 2 })
-    assert(not state.providerRegistered, "zoneApiVersion≠1 應降級")
+    assert(state.providerRegistered, "zoneApiVersion 2 >= 1 應照常註冊 provider")
+    assert(state.actionRegistered, "zoneApiVersion 2 >= 1 應照常註冊 action")
+    assert(state.handlers.onGameStart ~= nil, "不應早退")
+end)
+
+check("client: zoneApiVersion 低於所需 → 守衛降級不註冊", function()
+    local state = newClientHarness({ apiVersion = 0 })
+    assert(not state.providerRegistered, "zoneApiVersion 0 < 1 應降級")
+    assert(state.handlers.onGameStart == nil, "降級應早退")
+end)
+
+check("client: zoneApiVersion 非數字（缺欄位/型別錯）→ 守衛降級，不得比較拋錯", function()
+    local state = newClientHarness({ apiVersion = false })
+    assert(not state.providerRegistered, "無版本欄位應降級")
     assert(state.handlers.onGameStart == nil, "降級應早退")
 end)
 

@@ -23,14 +23,18 @@ local OWN_MOD_ID = "MinidoracatMiniMapZonesFor42"
 local STALE_MS = 60000                          -- 未集滿批次逾時清理門檻（研究 §5：RELIABLE 無序）
 
 --------------------------------------------------------------------------------
--- 契約 C1：版本守衛。require= 只保證主 MOD 存在、不保證版本。要求 0.8.0 完整 zone API——
--- registerZoneProvider（出資料）＋registerZoneAction（設定頁生成按鈕）＋zoneApiVersion==1
--- （契約版本鎖）。缺任一 → 印一次 log ＋整個 client 功能降級 no-op（早退，之後的 provider
+-- 契約 C1：版本守衛。require= 只保證主 MOD 存在、不保證版本（Workshop 兩包獨立更新）。要求
+-- registerZoneProvider（出資料）＋registerZoneAction（設定頁生成按鈕）＋zoneApiVersion >= 1。
+-- 版本欄位一律用 >= 比較（不可用 ==）：主 MOD additive 升版（zoneApiVersion 2、3…）仍相容，
+-- 用 == 會讓本包在主 MOD 升版後安靜停用。nil 不能與數字比較，故先驗 type=="number"。
+-- 缺任一 → 印一次 log ＋整個 client 功能降級 no-op（早退，之後的 provider
 -- 註冊/action/事件/聊天攔截全不掛載），不得 crash。
 --------------------------------------------------------------------------------
 if not (MinidoracatMiniMapAPI and MinidoracatMiniMapAPI.registerZoneProvider
-    and MinidoracatMiniMapAPI.registerZoneAction and MinidoracatMiniMapAPI.zoneApiVersion == 1) then
-    print("[" .. MODULE .. "] requires main MOD 42.19.0-0.8.0+ (zone API incomplete), disabled")
+    and MinidoracatMiniMapAPI.registerZoneAction
+    and type(MinidoracatMiniMapAPI.zoneApiVersion) == "number"
+    and MinidoracatMiniMapAPI.zoneApiVersion >= 1) then
+    print("[" .. MODULE .. "] requires MinidoracatMiniMapFor42 with zone API >= 1, disabled")
     return
 end
 
