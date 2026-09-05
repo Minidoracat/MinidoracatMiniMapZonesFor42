@@ -100,3 +100,18 @@
 | MinidoracatMiniMapModMapsFor42 | 地圖 MOD 小地圖圖像包 |
 | MinidoracatMiniMapCompatFor42 | 第三方 MOD 相容包 |
 | MinidoracatMiniMapZonesFor42 | 本包——伺服器自訂區域 |
+
+### 發布到 Workshop
+
+雙擊 `Publish_Workshop.bat`：先確認 Steam 用戶端已以作者帳號登入（未登入會喚起 Steam 並等你登入後重試），
+再選擇更新 MOD 內容（含 `STEAM_CHANGELOG.md` 更新說明）／GIF 封面／簡介／全部；提交後回查 Steam，
+任一不符即以非零碼結束。設定在 `scripts/workshop_publish.json`（Workshop ID、簡介語言槽來源、GIF 路徑）。
+
+```
+uv run --no-project python -B scripts/publish_workshop.py --mode all --yes       # 自動化／AI；或 content / preview / description
+uv run --no-project python -B scripts/publish_workshop.py --mode all --dry-run   # 只檢查、顯示計畫
+```
+
+退出碼：`0` 成功／`2` 參數或取消／`3` 未登入、帳號不是擁有者／`4` 前置檢查失敗／`5` 提交失敗／`6` 已提交但回查不符。
+網頁動態封面放 `MOD/<資料夾>/workshop/preview.gif`（不在 `Contents/`，不會下載給玩家）；遊戲內上傳器仍用 `preview.png`，
+且每次會把網頁封面覆回靜態，需要動態封面時一律改用本工具發布。
