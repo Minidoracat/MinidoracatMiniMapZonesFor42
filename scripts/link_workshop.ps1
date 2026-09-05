@@ -1,7 +1,6 @@
-# MinidoracatMiniMapZonesFor42 Workshop 符號連結管理
+﻿# Minidoracat PZ MOD 家族 — Workshop 符號連結管理（統一版，正本：D:/github/pz-family-docs/scripts/）
 # 用途：將開發目錄連結到 Zomboid Workshop 和 mods 目錄，方便本地測試和 Workshop 上傳
-# 本包 require=MinidoracatMiniMapFor42：測試時需要主 MOD 也在 mods 目錄可見，
-# 故本腳本一併掛載主 MOD（雙掛寫法參考 MinidoracatMiniMapCompatFor42/scripts/link_workshop.ps1）。
+# 零設定：自動從 MOD/*/Contents/mods/*/42/mod.info 讀取 id 與 require=
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -10,39 +9,54 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 # 路徑偵測（支援 bat 啟動器和直接執行兩種模式）
 # ============================================
 if ($env:PROJECT_ROOT) {
-    # 從 bat 啟動器呼叫，使用傳入的專案根目錄
     $ProjectRoot = $env:PROJECT_ROOT.TrimEnd('\\')
 } elseif ($PSScriptRoot) {
-    # 直接執行 ps1，使用腳本所在目錄推算
     $ProjectRoot = Split-Path -Parent $PSScriptRoot
 } else {
-    # Fallback：使用目前工作目錄
     $ProjectRoot = (Get-Location).Path
 }
-$ModId = "MinidoracatMiniMapZonesFor42"
-$ModSource = Join-Path $ProjectRoot "MOD\$ModId"
-$ModContent = Join-Path $ModSource "Contents\mods\$ModId"
 
-# Workshop 符號連結（用於上傳）
+# ============================================
+# MOD 識別：自動偵測（唯一的 mod.info）
+# ============================================
+$modInfos = @(Get-ChildItem (Join-Path $ProjectRoot "MOD") -Recurse -Filter "mod.info" -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -match '\\Contents\\mods\\[^\\]+\\42\\mod\.info$' })
+if ($modInfos.Count -ne 1) {
+    Write-Host ""
+    Write-Host "[錯誤] 期望恰好一個 MOD/<f>/Contents/mods/<f>/42/mod.info，找到 $($modInfos.Count) 個" -ForegroundColor Red
+    Write-Host "  搜尋根：$ProjectRoot\MOD" -ForegroundColor Red
+    Read-Host "按 Enter 結束"
+    exit 1
+}
+$ModContent = Split-Path -Parent $modInfos[0].DirectoryName          # …\Contents\mods\<f>
+$ModSource  = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $ModContent))   # …\MOD\<f>
+$MOD_FOLDER = Split-Path -Leaf $ModSource
+$modKv = @{}
+foreach ($line in Get-Content $modInfos[0].FullName -Encoding UTF8) {
+    if ($line -match '^\s*([A-Za-z_]+)\s*=(.*)$') { if (-not $modKv.ContainsKey($Matches[1])) { $modKv[$Matches[1]] = $Matches[2].Trim() } }
+}
+$MOD_ID = $modKv['id']
+if (-not $MOD_ID) { Write-Host "[錯誤] mod.info 缺 id=" -ForegroundColor Red; Read-Host "按 Enter 結束"; exit 1 }
+# require= 逗號分隔（ChooseGameInfo.java 只 split(",")）；寫入 Mods= 時依賴排在前面
+$REQUIRED_MOD_IDS = @()
+if ($modKv['require']) { $REQUIRED_MOD_IDS = @($modKv['require'] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+# 家族依賴（可在本機 Zomboid\mods 掛載）vs 第三方依賴（Steam 訂閱，僅提醒）
+$FamilyDeps = @($REQUIRED_MOD_IDS | Where-Object { $_ -like 'Minidoracat*' -or $_ -like 'Cat*For42' })
+# 翻譯包永遠墊底（後載入者覆蓋先載入者）：只重排既有條目、不新增
+$TranslationModsLast = @('CatModLangFor42', 'CatLangFor42')
+
+# Workshop 符號連結（用於上傳；連結名 = 資料夾名）
 $WorkshopDir = Join-Path $env:UserProfile "Zomboid\Workshop"
-$WorkshopLink = Join-Path $WorkshopDir $ModId
+$WorkshopLink = Join-Path $WorkshopDir $MOD_FOLDER
 
 # Mods 符號連結（用於遊戲載入，PZ 優先從此處讀取；連結名 = mod id）
 $ModsDir = Join-Path $env:UserProfile "Zomboid\mods"
-$ModsLink = Join-Path $ModsDir $ModId
-
-# 主 MOD（require=MinidoracatMiniMapFor42）：本包無主 MOD 不掛載也不作用，
-# 測試環境需要一併補上主 MOD 的 mods 連結（開發機固定路徑，同 Compat repo 慣例）
-$CoreModId = "MinidoracatMiniMapFor42"
-$CoreModSource = "D:\github\MinidoracatMiniMapFor42\MOD\MinidoracatMiniMapFor42\Contents\mods\MinidoracatMiniMapFor42"
-$CoreModLink = Join-Path $ModsDir $CoreModId
+$ModsLink = Join-Path $ModsDir $MOD_ID
 
 # 非 Steam 伺服器設定檔（-nosteam 伺服器不掃 Workshop，需把 mod id 寫進 ini 的 Mods=）
 $ServerIniDir = Join-Path $env:UserProfile "Zomboid\Server"
-# 伺服器契約（AGENTS.md）：Mods= 需同時含主 MOD 與本包，且主 MOD 在前（require 順序）；
-# 移除時只動本包，不動共用的主 MOD
-$ServerModIds = @($CoreModId, $ModId)
-$ServerModIdsOwn = @($ModId)
+$ServerModIds = @($REQUIRED_MOD_IDS) + $MOD_ID   # 寫入 Mods= 的 id（依賴在前）
+$ServerModIdsOwn = @($MOD_ID)                    # 移除時只動本 repo 擁有的 id
 
 # 驗證 MOD 來源目錄（以 mod.info 為準；workshop.txt 由 Workshop 上傳流程才會產生）
 if (-not (Test-Path (Join-Path $ModContent "42\mod.info"))) {
@@ -55,10 +69,12 @@ if (-not (Test-Path (Join-Path $ModContent "42\mod.info"))) {
     exit 1
 }
 
-# 清理誤入 MOD 內容樹的 .omc 開發狀態目錄（AI 工具 hook 會就地寫入；
+# 清理誤入 MOD 內容樹的 AI 工具狀態目錄（hook 會就地寫入；
 # git 已忽略，但 Workshop 上傳是整包目錄，出貨包內必須不存在）
-Get-ChildItem -Path $ModSource -Recurse -Force -Directory -Filter ".omc" -ErrorAction SilentlyContinue |
-    Remove-Item -Recurse -Force -Confirm:$false
+foreach ($junk in @(".omc", ".claude", ".gitnexus")) {
+    Get-ChildItem -Path $ModSource -Recurse -Force -Directory -Filter $junk -ErrorAction SilentlyContinue |
+        Remove-Item -Recurse -Force -Confirm:$false
+}
 
 # ============================================
 # 功能函式
@@ -78,6 +94,7 @@ function Show-Status {
 
     $checks = @(
         @{ File = "workshop.txt"; Desc = "workshop.txt（Workshop 上傳後才有）" }
+        @{ File = "preview.png";  Desc = "preview.png" }
         @{ File = "Contents";     Desc = "Contents/" }
     )
     foreach ($c in $checks) {
@@ -103,23 +120,12 @@ function Show-Status {
         Write-Host "實體資料夾（非符號連結）" -ForegroundColor Yellow
     }
 
-    # Mods 連結（本包）
+    # Mods 連結
     Write-Host "  [Mods]     " -NoNewline
     if (-not (Test-Path $ModsLink)) {
         Write-Host "未掛載" -ForegroundColor DarkGray
     } elseif (Test-IsSymlink $ModsLink) {
         $target = (Get-Item $ModsLink -Force).Target
-        Write-Host "已掛載 -> $target" -ForegroundColor Green
-    } else {
-        Write-Host "實體資料夾（Steam 快取？）" -ForegroundColor Yellow
-    }
-
-    # Mods 連結（主 MOD）
-    Write-Host "  [主MOD]    " -NoNewline
-    if (-not (Test-Path $CoreModLink)) {
-        Write-Host "未掛載" -ForegroundColor DarkGray
-    } elseif (Test-IsSymlink $CoreModLink) {
-        $target = (Get-Item $CoreModLink -Force).Target
         Write-Host "已掛載 -> $target" -ForegroundColor Green
     } else {
         Write-Host "實體資料夾（Steam 快取？）" -ForegroundColor Yellow
@@ -136,15 +142,15 @@ function New-SymlinkSafe {
             Write-Host "  [$Label] 已掛載 -> $existing" -ForegroundColor Green
             return
         }
-        # 實體資料夾（可能是 Steam 快取）—— 自動重新命名
-        $bakPath = "$LinkPath.bak"
-        if (Test-Path $bakPath) {
-            # ponytail: 既有 .bak 可能是先前保留下來的資料，不可靜默刪除——
-            # 改用時間戳記檔名，保留舊備份
-            $bakPath = "$LinkPath.bak.$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+        # 實體資料夾（可能是 Steam 快取）—— 以時間戳備份改名，絕不刪除既有資料或舊備份
+        $bakPath = "$LinkPath.bak-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+        try {
+            Rename-Item $LinkPath $bakPath -Force -ErrorAction Stop
+        } catch {
+            Write-Host "  [$Label] 無法備份既有資料夾，中止此連結: $($_.Exception.Message)" -ForegroundColor Red
+            return
         }
-        Rename-Item $LinkPath $bakPath -Force
-        Write-Host "  [$Label] 已將舊資料夾重新命名為 $(Split-Path -Leaf $bakPath)" -ForegroundColor Yellow
+        Write-Host "  [$Label] 已將舊資料夾備份為 $(Split-Path -Leaf $bakPath)" -ForegroundColor Yellow
     }
 
     # 確保父目錄存在
@@ -251,7 +257,6 @@ function Update-ServerIniMods {
     }
 
     # B42 的 Mods= 條目帶 \ 前綴（如 \StarlitLibrary）：比對時去前綴，寫入時沿用檔內既有風格
-    $existingIds = @($current | ForEach-Object { $_.TrimStart('\') })
     if ($Remove) {
         # 只移除本 repo 擁有的 id，不動共用/主 MOD；大小寫寬鬆以順便清掉手打錯大小寫的殘留
         $updated = @($current | Where-Object { $ServerModIdsOwn -notcontains $_.TrimStart('\') })
@@ -260,11 +265,14 @@ function Update-ServerIniMods {
         if ($current.Count -gt 0 -and @($current | Where-Object { $_.StartsWith('\') }).Count -eq 0) {
             $prefix = ''
         }
-        # 先移除目標 ID 的舊位置／錯誤大小寫，再依 $ServerModIds 順序（主 MOD 在前）重新追加，
-        # 確保 require= 的載入順序在 no-steam ini 上也一致
+        # 先移除本次管理的所有 id（大小寫寬鬆，順便清掉手打錯大小寫的殘留），
+        # 再依「依賴在前」固定順序整組追加——保證 Mods= 內主 MOD 永遠排在本 MOD 前（仿 Compat/Zones 源版）
         $updated = @($current | Where-Object { $ServerModIds -notcontains $_.TrimStart('\') })
         foreach ($id in $ServerModIds) { $updated += "$prefix$id" }
     }
+    # 翻譯包墊底：CatModLangFor42 倒數第二、CatLangFor42 最後（只重排既有條目）
+    $tail = @($TranslationModsLast | ForEach-Object { $t = $_; $updated | Where-Object { $_.TrimStart('\\') -ieq $t } | Select-Object -First 1 })
+    if ($tail.Count -gt 0) { $updated = @($updated | Where-Object { $TranslationModsLast -notcontains $_.TrimStart('\\') }) + $tail }
 
     if (($updated -join ';') -eq ($current -join ';')) {
         Write-Host "  [伺服器] $(Split-Path -Leaf $IniPath) 的 Mods= 無需變更" -ForegroundColor DarkGray
@@ -274,7 +282,8 @@ function Update-ServerIniMods {
     $newLine = "Mods=" + ($updated -join ';')
     if ($idx -ge 0) { $lines[$idx] = $newLine } else { $lines += $newLine }
 
-    # 伺服器啟動/關閉時會整檔回寫 ini（AGENTS.md），執行中寫入必被覆蓋——同名伺服器在跑就拒絕（偵測失敗放行）
+    # ini 回寫（反編譯結論，見 pz-family-docs/production-server.md）：關機不回寫，但執行期任何選項變更會整檔覆蓋——同名伺服器在跑就拒絕；
+    # 偵測失敗一律取消寫入（fail-closed），不能在「不知道伺服器是否在跑」時動 ini
     $serverName = [IO.Path]::GetFileNameWithoutExtension($IniPath)
     try {
         $namePattern = '-servername\s+' + [regex]::Escape($serverName) + '(\s|$)'
@@ -282,9 +291,12 @@ function Update-ServerIniMods {
             Where-Object { $_.CommandLine -match 'zombie\.network\.GameServer' -and
                 ($_.CommandLine -match $namePattern -or
                  ($serverName -eq 'servertest' -and $_.CommandLine -notmatch '-servername\s')) })
-    } catch { $running = @() }
+    } catch {
+        Write-Host "  [伺服器] 無法確認伺服器是否執行中（$($_.Exception.Message)），取消寫入" -ForegroundColor Red
+        return
+    }
     if ($running.Count -gt 0) {
-        Write-Host "  [伺服器] $serverName 伺服器正在執行，關閉時會整檔回寫覆蓋——請先停止伺服器再寫入" -ForegroundColor Red
+        Write-Host "  [伺服器] $serverName 伺服器正在執行，執行期選項變更會整檔覆蓋——請先停止伺服器再寫入" -ForegroundColor Red
         return
     }
 
@@ -311,7 +323,7 @@ function Invoke-ServerIniPrompt {
     $question = if ($Remove) {
         "是否同時從非 Steam 伺服器設定檔的 Mods= 移除？(y/N)"
     } else {
-        "是否同時把主 MOD、本包 mod id 依序寫入非 Steam 伺服器設定檔的 Mods=？(y/N)"
+        "是否同時把 mod id 寫入非 Steam 伺服器設定檔的 Mods=？(y/N)"
     }
     $ans = Read-Host $question
     if ($ans -notmatch '^[Yy]') { return }
@@ -328,23 +340,14 @@ function Mount-Workshop {
     Write-Host "正在建立符號連結..." -ForegroundColor Cyan
     Write-Host ""
 
-    # 嘗試不需提權建立三個連結：Workshop（本包）、Mods（本包）、Mods（主 MOD）
+    # 嘗試不需提權建立兩個連結
     $ws = New-SymlinkSafe -LinkPath $WorkshopLink -Target $ModSource -Label "Workshop"
     $md = New-SymlinkSafe -LinkPath $ModsLink -Target $ModContent -Label "Mods"
-
-    $core = $true
-    if (Test-Path $CoreModSource) {
-        $core = New-SymlinkSafe -LinkPath $CoreModLink -Target $CoreModSource -Label "主MOD"
-    } else {
-        Write-Host "  [主MOD] 找不到來源，跳過：$CoreModSource" -ForegroundColor Yellow
-        $core = $true
-    }
 
     # 如果任一個失敗，嘗試 UAC 提權
     $needElevate = @()
     if ($ws -eq $false) { $needElevate += @{ Link=$WorkshopLink; Target=$ModSource; Label="Workshop" } }
     if ($md -eq $false) { $needElevate += @{ Link=$ModsLink; Target=$ModContent; Label="Mods" } }
-    if ($core -eq $false) { $needElevate += @{ Link=$CoreModLink; Target=$CoreModSource; Label="主MOD" } }
 
     if ($needElevate.Count -gt 0) {
         Write-Host ""
@@ -355,8 +358,15 @@ function Mount-Workshop {
     }
 
     Write-Host ""
-    if ((Test-IsSymlink $WorkshopLink) -and (Test-IsSymlink $ModsLink)) {
-        Write-Host "[完成] 現在可以在 PZ 遊戲中測試此 MOD。" -ForegroundColor Green
+    # 依賴可見性：Mods= 會連依賴 id 一起寫入，依賴未掛載（Zomboid\mods 下不可見）就寫進去，
+    # -nosteam 開服必報缺 mod——所以「全部完成」與 ini 寫入都必須把依賴納入判斷
+    $missingDeps = @($FamilyDeps | Where-Object { -not (Test-Path (Join-Path $ModsDir $_)) })
+    $thirdParty = @($REQUIRED_MOD_IDS | Where-Object { $FamilyDeps -notcontains $_ })
+    if ($thirdParty.Count -gt 0) { Write-Host "[提示] 第三方依賴（$($thirdParty -join '、')）請確認已在 Steam 訂閱；-nosteam 伺服器需其位於 Zomboid\mods" -ForegroundColor DarkGray }
+    if ((Test-IsSymlink $WorkshopLink) -and (Test-IsSymlink $ModsLink) -and $missingDeps.Count -eq 0) {
+        Write-Host "[全部完成] 現在可以在 PZ 遊戲中測試此 MOD。" -ForegroundColor Green
+    } elseif ($missingDeps.Count -gt 0) {
+        Write-Host "[部分完成] 依賴未掛載（$($missingDeps -join '、')）——請先到主 MOD repo 跑 link_workshop.bat。" -ForegroundColor Yellow
     } else {
         Write-Host "[部分完成] 請檢查上方狀態。" -ForegroundColor Yellow
         Write-Host "替代方案：啟用 Windows 開發人員模式後即可免管理員建立連結：" -ForegroundColor Yellow
@@ -364,10 +374,12 @@ function Mount-Workshop {
     }
 
     Write-Host ""
-    if ((Test-IsSymlink $ModsLink) -and (Test-Path $CoreModLink)) {
+    if ((Test-IsSymlink $ModsLink) -and $missingDeps.Count -eq 0) {
         Invoke-ServerIniPrompt
+    } elseif ($missingDeps.Count -gt 0) {
+        Write-Host "[提示] 依賴未掛載，略過伺服器 ini 寫入" -ForegroundColor Yellow
     } else {
-        Write-Host "[提示] Mods 連結未建立或主 MOD 不在 mods 目錄，略過伺服器設定檔寫入詢問" -ForegroundColor Yellow
+        Write-Host "[提示] Mods 連結未建立，略過伺服器設定檔寫入詢問" -ForegroundColor Yellow
     }
     Write-Host ""
 }
@@ -410,7 +422,7 @@ function Remove-SymlinkSafe {
 
 function Dismount-Workshop {
     Write-Host ""
-    Write-Host "正在移除符號連結（僅本包；主 MOD 由其自己的 repo 管理，保留不動）..." -ForegroundColor Cyan
+    Write-Host "正在移除符號連結..." -ForegroundColor Cyan
     Write-Host ""
     Remove-SymlinkSafe -LinkPath $WorkshopLink -Label "Workshop"
     Remove-SymlinkSafe -LinkPath $ModsLink -Label "Mods"
@@ -423,20 +435,19 @@ function Dismount-Workshop {
 # ============================================
 # 主選單
 # ============================================
-$Host.UI.RawUI.WindowTitle = "$ModId Workshop 連結管理"
+$Host.UI.RawUI.WindowTitle = "$MOD_FOLDER Workshop 連結管理"
 
 while ($true) {
     Clear-Host
     Write-Host "============================================" -ForegroundColor Cyan
-    Write-Host "  $ModId 符號連結管理" -ForegroundColor Cyan
+    Write-Host "  $MOD_FOLDER 符號連結管理" -ForegroundColor Cyan
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  Workshop: $WorkshopLink"
     Write-Host "  Mods:     $ModsLink"
-    Write-Host "  主MOD:    $CoreModLink"
     Write-Host ""
-    Write-Host "  [1] 掛載 - 建立符號連結（Workshop + Mods + 主MOD）"
-    Write-Host "  [2] 卸載 - 移除符號連結（僅本包 Workshop + Mods）"
+    Write-Host "  [1] 掛載 - 建立符號連結（Workshop + Mods）"
+    Write-Host "  [2] 卸載 - 移除符號連結（Workshop + Mods）"
     Write-Host "  [3] 查看目前狀態"
     Write-Host ""
     Write-Host "  [Q] 離開"
