@@ -115,3 +115,18 @@ uv run --no-project python -B scripts/publish_workshop.py --mode all --dry-run  
 退出碼：`0` 成功／`2` 參數或取消／`3` 未登入、帳號不是擁有者／`4` 前置檢查失敗／`5` 提交失敗／`6` 已提交但回查不符。
 網頁動態封面放 `MOD/<資料夾>/workshop/preview.gif`（不在 `Contents/`，不會下載給玩家）；遊戲內上傳器仍用 `preview.png`，
 且每次會把網頁封面覆回靜態，需要動態封面時一律改用本工具發布。
+
+## 授權
+
+本專案採 [MIT License](LICENSE)，Copyright (c) 2026 Minidoracat，涵蓋本 repo 內自製的
+Lua／Python／PowerShell 程式、翻譯 JSON、`mod.info`／`sandbox-options.txt` 等設定、文件，
+以及封面圖像（`MOD/**/preview.png`、`…/42/poster.png`、`MOD/**/workshop/preview.gif`、
+`scripts/poster/zones_art.png`——以 AI 影像生成工具產出底圖後由本專案後製）。
+
+不在本授權範圍內：
+
+- **Project Zomboid © The Indie Stone**。本 MOD 為非官方粉絲作品，不重新散布任何遊戲檔案；
+  程式註解中的 `*.lua:行號`／`*.java:行號` 僅為引擎 API 出處標註（本 repo 不含 vanilla 程式碼片段）。
+  `docs/screenshots/**` 為遊戲畫面擷圖，著作權屬 The Indie Stone，僅作說明用途。
+- `MOD/.../42/media/lua/shared/MinidoracatZonesJson.lua`：rxi/[json.lua](https://github.com/rxi/json.lua)
+  的 decode-only 裁切版，MIT License, Copyright (c) 2020 rxi（授權全文與署名保留於該檔開頭）。
