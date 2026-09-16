@@ -54,6 +54,7 @@ The 0.4.0 category filter / halo edge / zoom LOD [b]need main MOD 42.20.1-0.14.0
 [url=https://discord.gg/Gur2V67]👉 Join the Discord server[/url]
 
 [h2]☕ Support the author[/h2]
+If this helped, a 👍 on this page and a ⭐ on GitHub help other players find it.
 The mod is free and always will be. If you enjoy it, consider buying me a coffee - tips go straight into servers and mod development. Source code is public on GitHub.
 [url=https://ko-fi.com/minidoracat][img]https://raw.githubusercontent.com/Minidoracat/workshop-resources/refs/heads/main/badges/badge_kofi.png[/img][/url] [url=https://github.com/Minidoracat/MinidoracatMiniMapZonesFor42][img]https://raw.githubusercontent.com/Minidoracat/workshop-resources/refs/heads/main/badges/badge_github.png[/img][/url]
 
