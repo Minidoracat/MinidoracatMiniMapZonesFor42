@@ -53,6 +53,10 @@
 [h2]💬 不具合報告・交流[/h2]
 [url=https://discord.gg/Gur2V67]👉 Discord サーバーに参加[/url]
 
+[h2]☕ 作者を応援[/h2]
+この MOD は今後もずっと無料です。気に入ったらコーヒーを一杯おごってください。支援はサーバーと MOD 開発に使います。ソースは GitHub で公開しています。
+[url=https://ko-fi.com/minidoracat][img]https://raw.githubusercontent.com/Minidoracat/workshop-resources/refs/heads/main/badges/badge_kofi.png[/img][/url] [url=https://github.com/Minidoracat/MinidoracatMiniMapZonesFor42][img]https://raw.githubusercontent.com/Minidoracat/workshop-resources/refs/heads/main/badges/badge_github.png[/img][/url]
+
 [b]#map #minimap #worldmap #Minidoracat[/b]
 
 Workshop ID: 3768276209
