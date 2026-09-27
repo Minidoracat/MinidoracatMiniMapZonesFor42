@@ -3,55 +3,49 @@
 
 [hr][/hr]
 
-[h2]✨ これは何？[/h2]
-[b]Minidoracat MiniMap for B42[/b] 本体 MOD 用の[b]サーバーカスタムゾーン addon[/b]：
-ミニマップとワールドマップの両方に、半透明の塗りつぶし範囲＋枠線＋名前ラベルを表示します。
+サーバーが定義したエリアを、ミニマップとワールドマップに表示します（半透明の塗り＋枠線＋名前）。イベント範囲やリセット区域などに使えます。サーバー管理者が `zones.json` を用意すれば、全プレイヤーに表示されます。シングルプレイでも使えます。
+
+[h2]📦 必要なもの[/h2]
 [list]
-[*] [b]サーバー定義ゾーン[/b]：サーバー側の `zones.json`（外部ツールから書き込み可能——イベント範囲ツールやリセットゾーンマーカーツールなど）。サーバーが検証してから全プレイヤーへリアルタイム配信；シングルプレイはローカルの `zones.json` を直接読み込みます
-[*] [b]`zones.json` に戻しました（0.3.0）[/b]：ゲーム 42.20.0 では `.json` が Lua ファイル書き込みの拡張子ホワイトリストから外れていたため 0.2.0 で一時的に `zones.txt` を使っていましたが、[b]42.20.1 で `.json` が復活[/b]したため、正規ファイルは再び `zones.json` です。0.2.0 の `zones.txt` は初回起動時に自動で `zones.json` へ移行されます（一回限り。既存の `zones.json` がある場合は先に `zones.premigrate.bak.json` へバックアップ）。外部ツールは今後 `zones.json` に書き込んでください。[b]本バージョンはゲーム Build 42.20.1 以上が必要です[/b]
+[*] [b]必須[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url]（本体 MOD）
+[*] [b]ゲームバージョン[/b]：Build 42.20.1 以上
 [/list]
-[i]内蔵リソースポイント（POI——バニラマップ 14 カテゴリ：軍事／医療／スーパーなど）は 0.8.0 で本体 MOD に内蔵されました。本体 MOD を入れれば表示され、この addon は不要です。[/i]
+シリーズの MOD はすべて最新版に更新し、更新後はゲームを再起動してください。
 
-[h2]⚠️ バージョン要件[/h2]
-[b]本体 MOD [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap for B42[/url] バージョン 42.19.0-0.8.0 以上が必要です[/b]（ゾーンレイヤー描画 API と設定ページのアクション行 API を提供）。
-本体 MOD が未導入またはバージョンが古い場合、本パックは静かに機能を無効化——
-ゾーンは一切表示されず、本体 MOD の他の機能には影響しません。
-0.4.0 のカテゴリ別表示切替／暗色縁取り／ズーム LOD の[b]完全な効果には本体 MOD 42.20.1-0.14.0 以上が必要[/b]；旧版の本体 MOD でもゾーンは通常どおり表示され、新効果が無いだけです。
+[h2]🚀 はじめかた[/h2]
+[olist]
+[*] 導入後にサーバーを一度起動します（シングルプレイならゲームを一度開始）。デモゾーン入りの `zones.json` テンプレートが `Zomboid/Lua/MinidoracatMiniMapZones/` に作成されます
+[*] テンプレートを編集して、自分のゾーンを追加・変更します
+[*] 保存したら自動更新（既定 60 秒）を待つか、管理者が [b]/reloadzones[/b] を入力してすぐに反映します
+[*] プレイヤーはミニマップやワールドマップでゾーンを確認できます
+[/olist]
 
-[h2]🧰 特徴[/h2]
+[h2]✨ 主な機能[/h2]
 [list]
-[*] [b]表示のみ[/b]：ゾーンはマップ上の視覚的なマーカーのみで、PVP／安全地帯などのゲーム機構は一切含みません
-[*] [b]サーバー権威同期[/b]：`zones.json` を編集するとポーリング間隔内（サンドボックスで調整可）で自動更新。管理者は [b]/reloadzones[/b] コマンドで即座に強制更新も可能。途中参加したプレイヤーも現在のゾーンをすぐ確認できます
-[*] [b]両マップ表示対応[/b]：ミニマップ・ワールドマップの両方で正しい投影・クリッピング
-[*] [b]トグル[/b]：本体 MOD の「カスタムゾーンレイヤーを表示」マスタースイッチ（統合設定ウィンドウ、デフォルトオン）——オフにするとレイヤー全体の描画が止まります
-[*] [b]矩形ゾーン[/b]：1つのゾーンを複数の矩形で構成でき、不規則な形状にも対応
-[*] [b]カテゴリ別表示切替（0.4.0）[/b]：ゾーンに `category` フィールドを付与——本体 MOD の「カスタムゾーン」設定セクションにカテゴリ別チェックボックス（全選択／全解除付き）が自動生成され、ウィンドウを開いたままでもデータ到着時に自動更新；テンプレートは「デモ：町／デモ：野外」でその場で体験可
-[*] [b]暗色縁取り `haloAlpha`（0.4.0）[/b]：枠線より軽い縁取り——塗りの下にやや広げた暗色の下敷きを敷き、境界はくっきり・描画コストは低く
-[*] [b]遠距離名称＋ズーム LOD（0.4.0）[/b]：ゾーン名称は既定でズームに関係なく表示、遠くからでも見つけやすい（オフ可）；建物スケールのゾーンは自動 3 段 LOD——中距離では結合ブロックのみ、遠距離では非表示、近づくと詳細描画
-[*] [b]自動テンプレート＆生成ボタン[/b]：初回起動時に 4 つのデモゾーン入り `zones.json` テンプレートを自動生成（サーバー言語に合わせてローカライズ）。統合設定ウィンドウには言語選択（繁体字中国語／簡体字中国語／英語／日本語）付きの「ゾーンテンプレートを生成」ボタンもあり——確認ダイアログで誤操作を防ぎ、既存ファイルはタイムスタンプ付き `.bak.json` にバックアップしてから上書き。サーバーでは「MOD 管理」権限が必要です
-[*] [b]enabled フィールド[/b]：ゾーンに `"enabled": false` を設定すると、座標を残したまま一時的に非表示にできます——削除は不要
-[*] [b]不正データ耐性[/b]：形式エラーや上限超過のエントリはスキップしてログに記録し、他のゾーン表示には影響しません
-[*] [b]シングル／マルチ両対応[/b]：シングルプレイはローカルの `zones.json` を直接読み込み、マルチプレイはサーバーが検証・配信
+[*] 表示のみ：マップ上に描くだけで、PVP や安全地帯などのゲーム機能は一切ありません
+[*] サーバーが検証して同期：ファイルを編集すると自動で更新され、途中参加のプレイヤーにもすぐ表示されます
+[*] ミニマップとワールドマップの両方に表示。複数の矩形を組み合わせて不規則な形も作れます
+[*] プレイヤーはカテゴリごとに表示するゾーンを選べます
+[*] ズームアウトしてもゾーン名が見えます。建物サイズのゾーンはズームに応じて自動で簡略化されます
+[*] 設定ウィンドウの「ゾーンテンプレートを生成」ボタン（4 言語）は、上書き前に古いファイルを自動バックアップします
+[*] 形式が正しくないゾーンはスキップされ、ほかのゾーンには影響しません
 [/list]
+📖 [b]各機能の詳しい説明・設定・よくある質問：[/b][url=https://steamcommunity.com/workshop/filedetails/discussion/3768276209/586187095760055791/]Zones Guide for Server Admins[/url]（英語）
 
-[h2]🔗 シリーズ MOD[/h2]
+[h2]🔗 Minidoracat ミニマップ シリーズ[/h2]
 [list]
-[*] [b]本体 MOD（必須、0.8.0+）[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap for B42[/url]——地図画像化の本体
-[*] [b]このページ[/b]：Zones——サーバーカスタムゾーン表示
-[*] [b]任意[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763914102]MOD Maps[/url]——マップ MOD 用マップパック addon
-[*] [b]任意[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3765182411]MOD Compatibility[/url]——サードパーティ MOD 互換パック（犬・馬などの動物アイコン）
-[/list]
-
-[h2]📋 MOD 情報[/h2]
-[list]
-[*] [b]Mod ID:[/b] MinidoracatMiniMapZonesFor42
-[*] [b]前提 MOD:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]Minidoracat MiniMap for B42[/url]（本体 MOD、バージョン 42.19.0-0.8.0 以上が必要。無い、または古い場合は本パックは機能しません）
-[*] [b]対応バージョン:[/b] Build 42.20.1+（42.20.0 は `.json` を書き込めないため非対応）
-[*] シングル / マルチ両対応
+[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url]（本体・必須）——画像化したワールドマップとミニマップ、検索、ナビ
+[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763914102]MOD Maps[/url]——マップ MOD の地図画像と道路名の翻訳
+[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3792675881]AutoDrive[/url]——GPS ナビと自動運転
+[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3768276209]Zones[/url]——サーバー独自のエリア表示
+[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3765182411]MOD Compatibility[/url]——犬・馬など他 MOD の動物アイコン
 [/list]
 
 [h2]💬 不具合報告・交流[/h2]
-[url=https://discord.gg/Gur2V67]👉 Discord サーバーに参加[/url]
+[list]
+[*] GitHub Issues：[url=https://github.com/Minidoracat/MinidoracatMiniMapZonesFor42/issues]https://github.com/Minidoracat/MinidoracatMiniMapZonesFor42/issues[/url]
+[*] Discord：[url=https://discord.gg/Gur2V67]https://discord.gg/Gur2V67[/url]
+[/list]
 
 [h2]☕ 作者を応援[/h2]
 役に立ったら、このページに 👍 と GitHub に ⭐ をお願いします。より多くのプレイヤーに届きやすくなります。
