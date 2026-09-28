@@ -3,7 +3,7 @@
 
 [hr][/hr]
 
-Shows server-defined zones on the minimap and the world map (a translucent fill, outline and name label) — event areas, reset zones and so on. The server admin writes one `zones.json` and every player sees the zones. Works in singleplayer too.
+Shows server-defined zones such as event areas and reset zones on the minimap and the world map. The admin edits one zones file and every player sees the zones; works in singleplayer too.
 
 [h2]📦 Requirements[/h2]
 [list]
@@ -14,21 +14,21 @@ Keep every Minidoracat MiniMap series mod up to date and restart the game after 
 
 [h2]🚀 Quick start[/h2]
 [olist]
-[*] Start the server once after installing (in singleplayer, just load a game). A `zones.json` template with demo zones is created in `Zomboid/Lua/MinidoracatMiniMapZones/`
+[*] Start the server or a singleplayer game once after installing; a zones template file is created automatically
 [*] Edit the demo zones or add your own
-[*] Save the file and wait for the automatic refresh (60 seconds by default), or have an admin type [b]/reloadzones[/b] to refresh right away
+[*] Save and wait for the automatic refresh, or have an admin type [b]/reloadzones[/b] to refresh right away
 [*] Players open the minimap or world map and see the zones
 [/olist]
 
 [h2]✨ Main features[/h2]
 [list]
-[*] Display only: zones are drawn on the map and add no PVP, safe-zone or other gameplay mechanics
-[*] Server-validated sync: file edits update automatically, and players who join later see the current zones
-[*] Shown on both the minimap and the world map; one zone can combine several rectangles for irregular shapes
-[*] Players can choose which zone categories to show
-[*] Zone names stay visible when zoomed out; building-sized zones simplify automatically as you zoom
-[*] A "Generate zones template" button in the settings window (four languages) backs up the old file before overwriting
-[*] Malformed zones are skipped without affecting the rest
+[*] [b]Display only[/b]: zones are drawn on the map and add no PVP, safe-zone or other gameplay mechanics
+[*] [b]Server-validated sync[/b]: file edits update automatically, and players who join later see the current zones
+[*] [b]Both maps[/b]: one zone can combine several rectangles for irregular shapes
+[*] [b]Category filter[/b]: players choose which zone categories to show
+[*] [b]Readable names[/b]: zone names stay visible when zoomed out; small zones simplify as you zoom
+[*] [b]One-click template[/b]: generate a template from the settings window; the old file is backed up first
+[*] [b]Fault tolerant[/b]: malformed zones are skipped without affecting the rest
 [/list]
 📖 [b]Full details on every feature, settings and FAQ:[/b] [url=https://steamcommunity.com/workshop/filedetails/discussion/3768276209/586187095760055791/]Zones Guide for Server Admins[/url]
 
@@ -40,6 +40,7 @@ Keep every Minidoracat MiniMap series mod up to date and restart the game after 
 [*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3768276209]Zones[/url] — custom server zones
 [*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3765182411]MOD Compatibility[/url] — icons for third-party animals such as dogs and horses
 [/list]
+More mods: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat Mods for B42 collection[/url]
 
 [h2]💬 Feedback & community[/h2]
 [list]
