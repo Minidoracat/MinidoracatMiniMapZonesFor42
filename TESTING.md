@@ -3,8 +3,8 @@
 本清單涵蓋自動化冒煙／dry-run 無法覆蓋的「進遊戲肉眼驗證」項目。自動化部分（雙 MOD 掛載、
 boot 冒煙兩輪、500 zone 分包壓測、壞 JSON 三態）已在 US-009 通過；以下請使用者實機逐項打勾。
 
-- 適用版本：主 MOD `MinidoracatMiniMapFor42` 42.19.0-0.8.0+ ＋ 本包 `MinidoracatMiniMapZonesFor42` 42.20.1-0.3.0
-  （本包需遊戲 Build **42.20.1** 以上——42.20.0 的 Lua 寫檔副檔名白名單不含 `.json`）
+- 適用版本：主 MOD `MinidoracatMiniMapFor42` 42.19.0-0.8.0+ ＋ 本包 `MinidoracatMiniMapZonesFor42` 42.20.1-0.5.1
+  （遊戲版本跟隨主 MOD，目前需 Build **42.21.0** 以上；本包自身下限 42.20.1——42.20.0 的 Lua 寫檔副檔名白名單不含 `.json`）
 - 相依：本包 `require=MinidoracatMiniMapFor42`，載入順序主 MOD 在前
 - 座標系：世界 square 座標（x 向東、y 向南，左上為原點）
 

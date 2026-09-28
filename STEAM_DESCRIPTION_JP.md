@@ -8,7 +8,7 @@
 [h2]📦 必要なもの[/h2]
 [list]
 [*] [b]必須[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url]（本体 MOD）
-[*] [b]ゲームバージョン[/b]：Build 42.20.1 以上
+[*] [b]ゲームバージョン[/b]：本体 MOD に準じます（現在は Build 42.21.0 以上）
 [/list]
 シリーズの MOD はすべて最新版に更新し、更新後はゲームを再起動してください。
 

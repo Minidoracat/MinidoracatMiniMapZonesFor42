@@ -1,5 +1,14 @@
 # Changelog
 
+## [42.21.0-0.5.2] - 2026-09-29
+
+### 變更
+
+- 對應遊戲 Build 42.21.0：已確認區域讀寫、同步與指令在 42.21.0 下運作不受影響，版本號前綴改為 42.21.0
+- MOD 說明的遊戲版本需求改為「跟隨主 MOD（目前需 Build 42.21.0 以上）」：主 MOD 已要求 42.21.0，本包必須搭配主 MOD，舊說明寫的 42.20.1 已不符實際
+
+> 技術要點：只改 `mod.info` 的 `description=` 與 README／TESTING／Steam 稿；`versionMin=42.20.1` 依家族規則維持（本包未用到 42.21 新 API），實際下限由 `require=` 連帶檢查主 MOD `versionMin`（`ChooseGameInfo.Mod.isAvailableRequired`）。
+
 ## [42.20.1-0.5.1] - 2026-09-03
 
 ### 變更

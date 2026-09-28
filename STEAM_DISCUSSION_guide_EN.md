@@ -8,7 +8,7 @@ Zones lets a server mark custom areas on the minimap and the world map (a transl
 
 [h2]🚀 Quick start[/h2]
 [olist]
-[*] Install the main mod [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url] and this mod (game Build 42.20.1 or later), then start the server once (in singleplayer, just load a game)
+[*] Install the main mod [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url] and this mod (the game version follows the main mod: currently Build 42.21.0 or later), then start the server once (in singleplayer, just load a game)
 [*] The generated template is at [b]Zomboid/Lua/MinidoracatMiniMapZones/zones.json[/b]. It contains four demo zones, written in the server's language
 [*] Edit the demo zones or add your own, then save
 [*] Wait for the automatic refresh (60 seconds by default), or have an admin type [b]/reloadzones[/b] in chat to apply it immediately — no restart needed
@@ -82,7 +82,7 @@ All in the main mod's unified settings window:
 [*] [b]I can't see any zones.[/b] Make sure the main mod is installed and up to date (if it is missing or too old, this mod shows no zones, and the main mod's other features are unaffected). Then check that "Show custom zone layer" is on and the category isn't unchecked
 [*] [b]I edited the file and nothing changed.[/b] Wait one poll interval or use /reloadzones. If the JSON is broken, the last successfully loaded zones stay on the map; the error goes to the server log and /reloadzones shows it directly
 [*] [b]Do zones affect gameplay?[/b] No, they are map markers only
-[*] [b]Is Build 42.20.0 supported?[/b] No. 42.20.0 cannot write .json files; use 42.20.1 or later
+[*] [b]Is Build 42.20.x supported?[/b] No. The main mod currently requires Build 42.21.0 or later, and this mod follows it; please update the game to 42.21.0 or later
 [*] [b]What about my old zones.txt?[/b] It is moved into zones.json automatically on first launch (if zones.json already had content, it is backed up to zones.premigrate.bak.json first). External tools should write zones.json from now on
 [*] [b]Where are the vanilla resource points (military, medical, supermarket…)?[/b] Those are built into the main mod; this mod isn't needed for them
 [*] [b]Does it work in singleplayer?[/b] Yes, singleplayer reads the local zones.json directly

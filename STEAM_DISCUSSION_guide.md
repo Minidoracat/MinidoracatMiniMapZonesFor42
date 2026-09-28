@@ -8,7 +8,7 @@ Zones 讓伺服器在小地圖與世界地圖上標出自訂區域（半透明�
 
 [h2]🚀 快速上手[/h2]
 [olist]
-[*] 安裝主 MOD [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url] 與本 MOD（遊戲需 Build 42.20.1 以上），啟動一次伺服器（單機就是開一次遊戲）
+[*] 安裝主 MOD [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url] 與本 MOD（遊戲版本跟隨主 MOD，目前需 Build 42.21.0 以上），啟動一次伺服器（單機就是開一次遊戲）
 [*] 自動產生的範本在 [b]Zomboid/Lua/MinidoracatMiniMapZones/zones.json[/b]，內含四個示範區域，文字依伺服器語言產生
 [*] 修改示範區域或新增自己的區域，存檔
 [*] 等自動更新（預設 60 秒），或由管理員在聊天輸入 [b]/reloadzones[/b] 立即生效，不需要重啟
@@ -82,7 +82,7 @@ Zones 讓伺服器在小地圖與世界地圖上標出自訂區域（半透明�
 [*] [b]看不到區域？[/b]確認主 MOD 已安裝並更新到最新版（主 MOD 沒裝或太舊時，本 MOD 不會顯示區域，但不影響主 MOD 其他功能）；再確認「顯示自訂區域圖層」有開、該類別沒被取消勾選
 [*] [b]改了檔案沒反應？[/b]等一個輪詢間隔，或用 /reloadzones。JSON 寫壞時會保留上一次成功載入的區域，錯誤會記在伺服器 log，用 /reloadzones 也會直接顯示
 [*] [b]區域會影響遊戲嗎？[/b]不會，只是地圖標示
-[*] [b]支援 Build 42.20.0 嗎？[/b]不支援。42.20.0 無法寫入 .json 檔，請使用 42.20.1 以上
+[*] [b]支援 Build 42.20.x 嗎？[/b]不支援。主 MOD 目前需要 Build 42.21.0 以上，本 MOD 跟著主 MOD，請更新遊戲到 42.21.0 以上
 [*] [b]以前用的 zones.txt 怎麼辦？[/b]首次啟動會自動搬進 zones.json（若 zones.json 原本有內容，會先備份為 zones.premigrate.bak.json）；之後外部程式請改寫 zones.json
 [*] [b]原版資源點（軍事、醫療、超市…）呢？[/b]那是主 MOD 內建的功能，不需要本 MOD
 [*] [b]單機能用嗎？[/b]可以，單機直接讀取本機的 zones.json
