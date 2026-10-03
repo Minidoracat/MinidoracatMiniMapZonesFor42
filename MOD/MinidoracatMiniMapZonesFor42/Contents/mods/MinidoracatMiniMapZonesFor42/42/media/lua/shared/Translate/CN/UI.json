@@ -1,5 +1,5 @@
 {
-    "UI_MinidoracatMiniMapZones_ReloadSent": "已发送 /reloadzones 重新加载请求…",
+    "UI_MinidoracatMiniMapZones_ReloadSent": "已发送 /reloadzones 重新加载请求...",
     "UI_MinidoracatMiniMapZones_ReloadResult": "区域数据已重新加载（%1 个区域）",
     "UI_MinidoracatMiniMapZones_ReloadFailed": "区域数据重新加载失败：%1",
     "UI_MinidoracatMiniMapZones_TplWestPoint": "示范区域：West Point 警察局",
@@ -17,7 +17,7 @@
     "UI_MinidoracatMiniMapZones_LangEN": "English",
     "UI_MinidoracatMiniMapZones_LangJP": "日本語",
     "UI_MinidoracatMiniMapZones_GenConfirm": "确定以「%1」生成区域范本？\\n现有 zones.json 会先备份（文件名带时间戳）再覆盖。",
-    "UI_MinidoracatMiniMapZones_GenSent": "已发送范本生成请求…",
+    "UI_MinidoracatMiniMapZones_GenSent": "已发送范本生成请求...",
     "UI_MinidoracatMiniMapZones_GenResult": "范本已写入 %1",
     "UI_MinidoracatMiniMapZones_GenResultBackup": "旧 zones.json 已备份为 %1，范本已写入",
     "UI_MinidoracatMiniMapZones_GenFailed": "范本生成失败：%1"

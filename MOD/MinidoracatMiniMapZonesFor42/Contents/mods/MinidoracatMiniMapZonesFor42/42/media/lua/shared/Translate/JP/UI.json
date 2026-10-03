@@ -13,7 +13,7 @@
     "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "選択した言語で 4 つのデモゾーンを含む zones.json テンプレートを生成し、直ちに適用します。zones.json が空または存在しない場合は直接書き込みます。内容がある場合は、まず古いファイルをタイムスタンプ付きファイル（例：zones.20260101-120000.bak.json。生成のたびに個別に保存され、上書きされません）にバックアップしてから上書きします。バックアップに失敗した場合、zones.json は変更されません。サーバーでは「MOD 管理」権限が必要です。",
     "UI_MinidoracatMiniMapZones_LangCurrent": "現在の言語に従う",
     "UI_MinidoracatMiniMapZones_LangCH": "繁體中文",
-    "UI_MinidoracatMiniMapZones_LangCN": "简体中文",
+    "UI_MinidoracatMiniMapZones_LangCN": "簡体中文",
     "UI_MinidoracatMiniMapZones_LangEN": "English",
     "UI_MinidoracatMiniMapZones_LangJP": "日本語",
     "UI_MinidoracatMiniMapZones_GenConfirm": "「%1」で区域テンプレートを生成しますか？\\n現在の zones.json はタイムスタンプ付き .bak.json ファイルにバックアップしてから上書きします。",

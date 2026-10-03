@@ -1,5 +1,5 @@
 {
-    "UI_MinidoracatMiniMapZones_ReloadSent": "已送出 /reloadzones 重新載入請求…",
+    "UI_MinidoracatMiniMapZones_ReloadSent": "已送出 /reloadzones 重新載入請求...",
     "UI_MinidoracatMiniMapZones_ReloadResult": "區域資料已重新載入（%1 個區域）",
     "UI_MinidoracatMiniMapZones_ReloadFailed": "區域資料重新載入失敗：%1",
     "UI_MinidoracatMiniMapZones_TplWestPoint": "示範區域：West Point 警局",
@@ -13,11 +13,11 @@
     "UI_MinidoracatMiniMapZones_GenTemplate_tooltip": "以選定語言生成含四個示範區域的 zones.json 範本並立即套用。zones.json 不存在或空白時直接寫入；已有內容時，會先把舊檔備份為帶時間戳的檔案（如 zones.20260101-120000.bak.json，每次生成各自保留、不互相覆蓋）再覆寫。備份失敗則不動 zones.json。在伺服器上需要「管理模組」權限。",
     "UI_MinidoracatMiniMapZones_LangCurrent": "跟隨當前語言",
     "UI_MinidoracatMiniMapZones_LangCH": "繁體中文",
-    "UI_MinidoracatMiniMapZones_LangCN": "简体中文",
+    "UI_MinidoracatMiniMapZones_LangCN": "簡體中文",
     "UI_MinidoracatMiniMapZones_LangEN": "English",
     "UI_MinidoracatMiniMapZones_LangJP": "日本語",
     "UI_MinidoracatMiniMapZones_GenConfirm": "確定以「%1」生成區域範本？\\n現有 zones.json 會先備份（檔名帶時間戳）再覆寫。",
-    "UI_MinidoracatMiniMapZones_GenSent": "已送出範本生成請求…",
+    "UI_MinidoracatMiniMapZones_GenSent": "已送出範本生成請求...",
     "UI_MinidoracatMiniMapZones_GenResult": "範本已寫入 %1",
     "UI_MinidoracatMiniMapZones_GenResultBackup": "舊 zones.json 已備份為 %1，範本已寫入",
     "UI_MinidoracatMiniMapZones_GenFailed": "範本生成失敗：%1"
