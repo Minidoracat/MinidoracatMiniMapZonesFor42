@@ -4,8 +4,11 @@
 PZ (B42.19/42.20 verified) registers only 18 globals in Kahlua BaseLib (pcall/print/select/
 type/tostring/tonumber/getmetatable/setmetatable/error/unpack/setfenv/getfenv/
 rawequal/rawset/rawget/collectgarbage/debugstacktrace/bytecodeloader) plus
-pairs/ipairs from TableLib -- notably **no `next` and no `assert`** (verified
-against the decompiled 42.19.0/42.20.0 snapshots (BaseLib byte-identical)). Calling one crashes in-game with
+pairs/ipairs from TableLib -- notably **no `next`** (verified against the
+decompiled 42.19.0/42.20.0 snapshots (BaseLib byte-identical)). `assert` is not
+in BaseLib either, but the game's root stdlib.lua defines it in Lua and
+J2SEPlatform loads that file into every Lua environment, so it is usable.
+Calling a missing one crashes in-game with
 "Object tried to call nil", but offline tests run under standard Lua where
 these exist, so they can't catch it (0.10.0 shipped exactly this bug in
 getLoadedMapDirs and every player fell back to the vanilla vector map).
@@ -24,7 +27,7 @@ RUNTIME_LUA_GLOB = "MOD/*/Contents/mods/*/42/media/lua/**/*.lua"
 # Verified-missing globals only (extend after checking the decompiled
 # BaseLib/TableLib/... registration, not on suspicion): bare call `name(`,
 # not preceded by `.`/`:`/identifier char (excludes st.nextMs, obj:next()).
-FORBIDDEN_CALL = re.compile(r"(?<![\w.:])(next|assert)\s*\(")
+FORBIDDEN_CALL = re.compile(r"(?<![\w.:])(next)\s*\(")
 LINE_COMMENT = re.compile(r"--.*")
 
 
