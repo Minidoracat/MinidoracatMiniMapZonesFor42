@@ -1,0 +1,5 @@
+{
+    "Sandbox_MinidoracatMiniMapZones": "Minidoracat MiniMap Zones",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds": "Интервал опроса данных зон (сек.)",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds_tooltip": "Как часто сервер перечитывает zones.json и проверяет изменения (если содержимое не изменилось, рассылки нет). Меньшие значения обновляют данные быстрее, но увеличивают нагрузку на диск сервера. Администраторы также могут обновить данные сразу командой /reloadzones, независимо от этого интервала."
+}

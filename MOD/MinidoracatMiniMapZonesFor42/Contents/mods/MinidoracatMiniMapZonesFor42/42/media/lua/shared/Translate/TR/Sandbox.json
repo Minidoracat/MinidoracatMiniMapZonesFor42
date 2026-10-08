@@ -1,0 +1,5 @@
+{
+    "Sandbox_MinidoracatMiniMapZones": "Minidoracat MiniMap Zones",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds": "Bölge verisi yoklama aralığı (saniye)",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds_tooltip": "Sunucunun zones.json dosyasını ne sıklıkla yeniden okuyup değişiklikleri kontrol edeceği (içerik değişmediyse yayın yapılmaz). Düşük değerler daha hızlı güncellenir ama sunucunun disk (IO) yükünü artırır. Yöneticiler bu aralıktan bağımsız olarak /reloadzones ile anında yenileme de yapabilir."
+}

@@ -1,0 +1,5 @@
+{
+    "Sandbox_MinidoracatMiniMapZones": "Minidoracat MiniMap Zones",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds": "Intervalo de verificação das zonas (segundos)",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds_tooltip": "Com que frequência o servidor relê o zones.json e verifica mudanças (nada é enviado se o conteúdo não mudou). Valores menores atualizam mais rápido, mas aumentam a carga de E/S do servidor. Os administradores também podem forçar uma atualização imediata com /reloadzones, independentemente deste intervalo."
+}

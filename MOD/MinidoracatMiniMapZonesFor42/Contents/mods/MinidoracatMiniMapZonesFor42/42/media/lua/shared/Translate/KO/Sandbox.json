@@ -1,0 +1,5 @@
+{
+    "Sandbox_MinidoracatMiniMapZones": "Minidoracat MiniMap Zones",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds": "구역 데이터 확인 간격(초)",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds_tooltip": "서버가 zones.json을 다시 읽어 변경 사항을 확인하는 주기입니다(내용이 바뀌지 않았으면 전송하지 않습니다). 값이 낮을수록 빨리 반영되지만 서버 IO 부하가 늘어납니다. 관리자는 이 간격과 관계없이 /reloadzones로 즉시 새로고침할 수도 있습니다."
+}

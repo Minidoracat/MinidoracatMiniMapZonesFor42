@@ -1,0 +1,5 @@
+{
+    "Sandbox_MinidoracatMiniMapZones": "Minidoracat MiniMap Zones",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds": "Interwał odczytu stref (sekundy)",
+    "Sandbox_MinidoracatMiniMapZones_PollIntervalSeconds_tooltip": "Jak często serwer ponownie odczytuje zones.json i sprawdza zmiany (jeśli zawartość się nie zmieniła, nic nie jest wysyłane). Niższe wartości szybciej aktualizują dane, ale zwiększają obciążenie dysku serwera. Administratorzy mogą też wymusić natychmiastowe odświeżenie poleceniem /reloadzones, niezależnie od tego interwału."
+}
