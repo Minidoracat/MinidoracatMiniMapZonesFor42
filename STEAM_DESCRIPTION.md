@@ -10,7 +10,7 @@
 [*] [b]必裝[/b]：[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url]（主 MOD）
 [*] [b]遊戲版本[/b]：跟隨主 MOD（目前需 Build 42.21.0 以上）
 [*] [b]中途加入／移除：[/b]都可以
-[*] [b]介面語言：[/b]繁體中文、简体中文、English、日本語、한국어、Русский、Español、Português、Türkçe、Français、Polski、Deutsch（中英日以外為 AI 翻譯，歡迎回報）
+[*] [b]介面語言：[/b]繁體中文、简体中文、English、日本語、한국어、Русский、Español、Português、Türkçe、Français、Polski、Deutsch（翻譯有問題請回報）
 [/list]
 系列 MOD 請都更新到最新版，更新後重新啟動遊戲。
 

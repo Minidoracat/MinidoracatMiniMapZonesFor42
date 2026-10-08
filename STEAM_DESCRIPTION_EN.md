@@ -10,7 +10,7 @@ Shows server-defined zones such as event areas and reset zones on the minimap an
 [*] [b]Required[/b]: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url] (main mod)
 [*] [b]Game version[/b]: same as the main mod (currently Build 42.21.0 or later)
 [*] [b]Add/remove mid-save:[/b] safe either way
-[*] [b]Languages:[/b] 繁體中文, 简体中文, English, 日本語, 한국어, Русский, Español, Português, Türkçe, Français, Polski, Deutsch (languages other than Chinese, English and Japanese are AI-translated; corrections welcome)
+[*] [b]Languages:[/b] 繁體中文, 简体中文, English, 日本語, 한국어, Русский, Español, Português, Türkçe, Français, Polski, Deutsch (please report any translation issues)
 [/list]
 Keep every Minidoracat MiniMap series mod up to date and restart the game after updating.
 
