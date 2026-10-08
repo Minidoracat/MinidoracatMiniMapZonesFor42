@@ -2,7 +2,7 @@
     "UI_MinidoracatMiniMapZones_ReloadSent": "/reloadzones yeniden yükleme isteği gönderildi...",
     "UI_MinidoracatMiniMapZones_ReloadResult": "Bölge verisi yeniden yüklendi (%1 bölge)",
     "UI_MinidoracatMiniMapZones_ReloadFailed": "Bölge verisi yeniden yüklenemedi: %1",
-    "UI_MinidoracatMiniMapZones_TplWestPoint": "Örnek bölge: West Point Polisi",
+    "UI_MinidoracatMiniMapZones_TplWestPoint": "Örnek bölge: West Point Polis Karakolu",
     "UI_MinidoracatMiniMapZones_TplRosewood": "Örnek bölge: Rosewood İtfaiyesi",
     "UI_MinidoracatMiniMapZones_TplBunker": "Örnek bölge: March Ridge Sığınağı",
     "UI_MinidoracatMiniMapZones_TplMultiRect": "Örnek bölge: çok dikdörtgenli L şekli (Riverside)",
