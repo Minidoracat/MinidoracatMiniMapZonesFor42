@@ -13,9 +13,9 @@
         "japanese": "STEAM_DESCRIPTION_JP.md"
     },
     "titles": {
-        "english": "[B42] Minidoracat MiniMap Zones",
-        "tchinese": "[B42] Minidoracat 小地圖 - 伺服器自訂區域",
-        "schinese": "[B42] Minidoracat 小地图 - 服务器自定义区域",
-        "japanese": "[B42] Minidoracat ミニマップ - サーバー独自ゾーン"
+        "english": "[B42] MiniMap Zones by Minidoracat",
+        "tchinese": "[B42] 小地圖 - 伺服器自訂區域 by Minidoracat",
+        "schinese": "[B42] 小地图 - 服务器自定义区域 by Minidoracat",
+        "japanese": "[B42] ミニマップ - サーバー独自ゾーン by Minidoracat"
     }
 }
