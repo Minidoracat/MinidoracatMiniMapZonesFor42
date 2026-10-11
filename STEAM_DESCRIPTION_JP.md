@@ -32,7 +32,7 @@
 [*] [b]テンプレート生成[/b]：設定ウィンドウから生成でき、上書き前に古いファイルを自動バックアップします
 [*] [b]エラーに強い[/b]：形式が正しくないゾーンはスキップされ、ほかのゾーンには影響しません
 [/list]
-📖 [b]各機能の詳しい説明・設定・よくある質問：[/b][url=https://steamcommunity.com/workshop/filedetails/discussion/3768276209/586187095760055791/]Zones Guide for Server Admins[/url]（英語）
+📖 [b]各機能の詳しい説明・設定・よくある質問：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3817849388]MiniMap Zones Mod Guide: zones.json, Sync & Player Settings[/url]（英語）
 
 [h2]🔗 Minidoracat ミニマップ シリーズ[/h2]
 [list]

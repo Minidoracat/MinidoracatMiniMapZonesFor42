@@ -32,7 +32,7 @@ Keep every Minidoracat MiniMap series mod up to date and restart the game after 
 [*] [b]One-click template[/b]: generate a template from the settings window; the old file is backed up first
 [*] [b]Fault tolerant[/b]: malformed zones are skipped without affecting the rest
 [/list]
-📖 [b]Full details on every feature, settings and FAQ:[/b] [url=https://steamcommunity.com/workshop/filedetails/discussion/3768276209/586187095760055791/]Zones Guide for Server Admins[/url]
+📖 [b]Full details on every feature, settings and FAQ:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3817849388]MiniMap Zones Mod Guide: zones.json, Sync & Player Settings[/url]
 
 [h2]🔗 Minidoracat MiniMap series[/h2]
 [list]

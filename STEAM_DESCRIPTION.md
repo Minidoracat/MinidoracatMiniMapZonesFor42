@@ -32,7 +32,7 @@
 [*] [b]一鍵生成範本[/b]：設定視窗就能生成範本，覆寫前自動備份舊檔
 [*] [b]容錯[/b]：格式錯誤的區域會被跳過，不影響其他區域
 [/list]
-📖 [b]每項功能的詳細說明、設定與常見問題：[/b][url=https://steamcommunity.com/workshop/filedetails/discussion/3768276209/586187095760055665/]Zones 完整說明（伺服器管理員）[/url]
+📖 [b]每項功能的詳細說明、設定與常見問題：[/b][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3817849328]小地圖 - 伺服器自訂區域 MiniMap Zones MOD 完整說明：zones.json、同步與玩家設定[/url]
 
 [h2]🔗 Minidoracat 小地圖系列[/h2]
 [list]
