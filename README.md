@@ -1,6 +1,6 @@
 # MinidoracatMiniMapZonesFor42
 
-[Minidoracat MiniMap for B42](https://github.com/Minidoracat) 主 MOD 的**伺服器自訂區域 addon**：
+[Minidoracat MiniMap](https://github.com/Minidoracat) 主 MOD 的**伺服器自訂區域 addon**：
 伺服器端一份 `zones.json` 定義任意矩形區域，主 MOD 在小地圖與世界地圖上畫出半透明填色＋
 框線＋置中名稱標籤。純資料 MOD——繪製、開關、統一設定視窗全在主 MOD
 （`registerZoneProvider` / `registerZoneAction` API），本包只負責「資料從哪來」。

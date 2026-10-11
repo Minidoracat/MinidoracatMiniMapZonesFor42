@@ -8,7 +8,7 @@ Zones lets a server mark custom areas on the minimap and the world map (a transl
 
 [h2]🚀 Quick start[/h2]
 [olist]
-[*] Install the main mod [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url] and this mod (the game version follows the main mod: currently Build 42.21.0 or later), then start the server once (in singleplayer, just load a game)
+[*] Install the main mod [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap[/url] and this mod (the game version follows the main mod: currently Build 42.21.0 or later), then start the server once (in singleplayer, just load a game)
 [*] The generated template is at [b]Zomboid/Lua/MinidoracatMiniMapZones/zones.json[/b]. It contains four demo zones, written in the server's language
 [*] Edit the demo zones or add your own, then save
 [*] Wait for the automatic refresh (60 seconds by default), or have an admin type [b]/reloadzones[/b] in chat to apply it immediately — no restart needed

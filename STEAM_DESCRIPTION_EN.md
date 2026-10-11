@@ -7,7 +7,7 @@ Shows server-defined zones such as event areas and reset zones on the minimap an
 
 [h2]📦 Requirements[/h2]
 [list]
-[*] [b]Required[/b]: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url] (main mod)
+[*] [b]Required[/b]: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap[/url] (main mod)
 [*] [b]Game version[/b]: same as the main mod (currently Build 42.21.0 or later)
 [*] [b]Add/remove mid-save:[/b] safe either way
 [*] [b]Languages:[/b] 繁體中文, 简体中文, English, 日本語, 한국어, Русский, Español, Português, Türkçe, Français, Polski, Deutsch (please report any translation issues)
@@ -36,7 +36,7 @@ Keep every Minidoracat MiniMap series mod up to date and restart the game after 
 
 [h2]🔗 Minidoracat MiniMap series[/h2]
 [list]
-[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url] (main mod, required) — image-based world map and minimap, search, navigation
+[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap[/url] (main mod, required) — image-based world map and minimap, search, navigation
 [*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763914102]MOD Maps[/url] — map images and street-name translations for map mods
 [*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3792675881]AutoDrive[/url] — GPS navigation and autonomous driving
 [*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3768276209]Zones[/url] — custom server zones

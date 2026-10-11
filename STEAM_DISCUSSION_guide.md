@@ -8,7 +8,7 @@ Zones 讓伺服器在小地圖與世界地圖上標出自訂區域（半透明�
 
 [h2]🚀 快速上手[/h2]
 [olist]
-[*] 安裝主 MOD [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap for B42[/url] 與本 MOD（遊戲版本跟隨主 MOD，目前需 Build 42.21.0 以上），啟動一次伺服器（單機就是開一次遊戲）
+[*] 安裝主 MOD [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap[/url] 與本 MOD（遊戲版本跟隨主 MOD，目前需 Build 42.21.0 以上），啟動一次伺服器（單機就是開一次遊戲）
 [*] 自動產生的範本在 [b]Zomboid/Lua/MinidoracatMiniMapZones/zones.json[/b]，內含四個示範區域，文字依伺服器語言產生
 [*] 修改示範區域或新增自己的區域，存檔
 [*] 等自動更新（預設 60 秒），或由管理員在聊天輸入 [b]/reloadzones[/b] 立即生效，不需要重啟
