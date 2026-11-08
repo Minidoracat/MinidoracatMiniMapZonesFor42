@@ -34,15 +34,8 @@ Keep every Minidoracat MiniMap series mod up to date and restart the game after 
 [/list]
 📖 [b]Full details on every feature, settings and FAQ:[/b] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3817849388]MiniMap Zones Mod Guide: zones.json, Sync & Player Settings[/url]
 
-[h2]🔗 Minidoracat MiniMap series[/h2]
-[list]
-[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763913359]MiniMap[/url] (main mod, required) — image-based world map and minimap, search, navigation
-[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763914102]MOD Maps[/url] — map images and street-name translations for map mods
-[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3792675881]AutoDrive[/url] — GPS navigation and autonomous driving
-[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3768276209]Zones[/url] — custom server zones
-[*] [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3765182411]MOD Compatibility[/url] — icons for third-party animals such as dogs and horses
-[/list]
-More mods: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat Mods for B42 collection[/url]
+[h2]🔗 More Minidoracat mods[/h2]
+All my mods are in the [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3809297109]Minidoracat Mods for B42 collection[/url] — pick what you need.
 
 [h2]💬 Feedback & community[/h2]
 [list]
