@@ -46,9 +46,10 @@ local pendingBatches = {}  -- { [bid] = { tot=, ts=, received=, total=, chunks={
 local lastAppliedBid = 0   -- D1：已套用的最高 bid；拒絕 <= 此值的舊/重放 bid（無序封包防倒退）
 local chatHookInstalled = false
 
--- 修正4：MP 下未集滿批次逾時（STALE_MS）丟棄後，補發一次 requestZones 重新索取全量——server 送包
--- 佇列滿時以整批淘汰（見 server enqueueFullSync），整批消失後 client 不會自動再收到（廣播只在
--- hash 變化時發）。本地冷卻避免 STALE 連環觸發洗版請求；server 端另有 3s per-player 冷卻不變。
+-- 修正4：MP 下未集滿批次逾時（STALE_MS）丟棄後，補發一次 requestZones 重新索取全量。集不滿的來源：
+-- 進場時只收到廣播的後半段、連線異常（server 送出第一包的批次都會整批送完，見 server
+-- enqueueFullSync）。廣播只在 hash 變化時發，不補要就停在舊區域。本地冷卻避免 STALE 連環觸發
+-- 洗版請求；server 端另有 3s per-player 冷卻不變。
 local STALE_REREQUEST_COOLDOWN_MS = 10000
 local lastStaleRequestMs = 0
 
@@ -83,12 +84,11 @@ local spPollIntervalSeconds = 60
 local spLastPollMs = 0
 
 -- D1 分包重組上限（防惡意 tot 撐爆記憶體）。必須 ≥ server 最壞分包數：server 按
--- 60000-byte wire 預算分包（enqueueFullSync），單 zone 上限＝單包預算 → 最壞每包
+-- 60000-byte wire 預算分包（packedPackets），單 zone 上限＝單包預算 → 最壞每包
 -- 恰 1 個 zone → tot ≤ zone 數 ≤ maxZones。綁共用真值使不變式結構成立（舊值 64
 -- 在全合規的重型 zones.json 下會被超過 → 整批靜默丟棄，review 抓出）。記憶體上界
 -- 不變：已組裝 zone 總數仍由 handleZoneData 的 batch.total>maxZones 閘封頂。
-local MAX_BATCH_PACKETS = (MinidoracatZonesShared and MinidoracatZonesShared.LIMITS
-    and MinidoracatZonesShared.LIMITS.maxZones) or 500
+local MAX_BATCH_PACKETS = MinidoracatZonesShared.LIMITS.maxZones
 
 local function log(msg)
     print("[" .. MODULE .. "] " .. tostring(msg))
@@ -119,7 +119,7 @@ end
 --------------------------------------------------------------------------------
 -- 接收：zoneData（分包重組）＋ reloadResult
 -- 分包協定（研究 §5）：args={bid,seq,tot,count,zones={wire...}}；ClientCommand RELIABLE
--- 但無序 → 按 bid 緩存 seq，集滿 tot 才「原子替換」serverZones，並丟棄其他未完成批次。
+-- 但無序 → 按 bid 緩存 seq，集滿 tot 才「原子替換」serverZones，並丟棄 bid ≤ 本批的未完成批次（較新的留著繼續收）。
 -- count＝本包 zone 數（Kahlua 無 nil 洞、勿依賴 #；仍以 nil-guard 兜住 count 與實陣列不一致）。
 --------------------------------------------------------------------------------
 local function handleZoneData(args)
@@ -193,7 +193,14 @@ local function handleZoneData(args)
         end
         serverZones = newZones -- 原子替換即快取更新（provider 回傳此參照）
         lastAppliedBid = bid  -- D1：記錄已套用 bid，後續舊 bid 一律拒絕
-        pendingBatches = {}   -- 丟棄所有其他未完成批次（新全量已到，舊的作廢）
+        -- 丟掉 bid ≤ 本批的批次：較舊的已被取代；本批自己也在這裡移出（不清會在 STALE 時多補要一次）。
+        -- 較新的留著繼續收——無序送達時，下一批的前幾包可能比這批的最後一包先到，清掉它就永遠集不滿
+        -- （那幾包不會重送）。先蒐集再刪，免 pairs 中改表。
+        local stale = {}
+        for b in pairs(pendingBatches) do
+            if b <= bid then stale[#stale + 1] = b end
+        end
+        for i = 1, #stale do pendingBatches[stale[i]] = nil end
     end
 end
 
@@ -507,8 +514,8 @@ Events.EveryOneMinute.Add(function()
         for i = 1, #expired do
             pendingBatches[expired[i]] = nil
         end
-        -- 修正4：MP 下整批逾時多半是 server 佇列淘汰整批所致 → 補發 requestZones 重新索取全量
-        -- （帶本地冷卻，避免連環洗版）。SP fallback 直接本地讀檔、無 server round-trip，不需重請求。
+        -- 修正4：MP 下整批逾時 → 補發 requestZones 重新索取全量（帶本地冷卻，避免連環洗版）。
+        -- SP fallback 直接本地讀檔、無 server round-trip，不需重請求。
         if not spFallbackActive and (now - lastStaleRequestMs) >= STALE_REREQUEST_COOLDOWN_MS then
             local player = getPlayer()
             if player then

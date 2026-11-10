@@ -25,7 +25,6 @@
 --   Events.OnClientCommand(module,command,player,args) → 家族 MinidoracatMiniMapServer.lua:57
 --       ＋ ClientCommands.lua:1246-1257 簽名
 --   Events.OnServerStarted → shared/Fishing/fishing_properties.lua:76、shared/Util/LuaNet.lua:288
---   Events.EveryOneMinute → server/Camping/SCampfireSystem.lua:183
 --   getTimestampMs()（毫秒）→ client/Vehicles/TimedActions/ISHorn.lua:10、ISSearchManager.lua:112
 --   player:getRole():hasCapability(Capability.ManipulateMods)
 --       · 伺服器端 hasCapability 用例 → server/ClientCommands.lua:646
@@ -40,15 +39,14 @@ local MODULE = "MinidoracatMiniMapZones"
 local MAX_ZONES_PER_PACKET = 150   -- 每包 zone 數硬上限（byte budget 為主，此為次要保底）
 local MAX_PACKETS_PER_TICK = 2     -- 送包節流：每 tick 最多 2 包
 local MAX_RELOAD_ERRORS = 30       -- reloadResult 回傳的錯誤訊息上限（防 payload 膨脹）
-local MAX_SEND_QUEUE = 128         -- 送包佇列硬上限（C1：滿則丟最舊並 log，防 DoS 無界成長）
 local REQUEST_COOLDOWN_MS = 3000   -- 單玩家 requestZones 冷卻（C1：<3s 重複請求忽略）
-
--- 廣播 target 的 sendQueue/coalescing key sentinel（nil 不能當 table key）
-local BROADCAST = {}
 
 -- 伺服器權威快取（分包一律從此出；validateZones 的正規化輸出形狀）
 local zoneCache = {}
 local zoneCacheCount = 0
+-- zoneCache 的全量分包（每項＝一包的 wire zone 陣列）。zoneCache 換掉時設 nil，下次入列才重打包；
+-- 佇列裡同一版內容的批次都指向這同一份，不各自複製。
+local packedCache = nil
 
 -- 變化偵測：先比長度、長度同才算 djb2（省掉未變檔的 hash 成本）
 local lastLen = nil
@@ -74,10 +72,12 @@ local function log(msg)
     print("[MinidoracatMiniMapZones] " .. tostring(msg))
 end
 
--- 廣播 target(nil) 與單玩家 target 統一成可當 table key 的值
-local function keyOf(target)
-    if target == nil then return BROADCAST end
-    return target
+-- 佇列裡有沒有給這位玩家的包
+local function hasQueued(target)
+    for i = 1, #sendQueue do
+        if sendQueue[i].target == target then return true end
+    end
+    return false
 end
 
 -- djb2 hash 移至 MinidoracatZonesShared.djb2（client SP fallback 本地輪詢共用同一份，
@@ -88,26 +88,11 @@ local function nextBid()
     return batchCounter
 end
 
--- C1 coalescing：移除佇列中同 target 尚未送出的舊全量包。新全量 bid 較新、client 以
--- lastAppliedBid 取捨，舊包留著只是佔佇列＋送過時資料；同時天然擋同 target 重複請求堆疊。
-local function purgeQueuedFor(target)
-    local k = keyOf(target)
-    local kept = {}
-    for i = 1, #sendQueue do
-        if keyOf(sendQueue[i].target) ~= k then
-            kept[#kept + 1] = sendQueue[i]
-        end
-    end
-    sendQueue = kept
-end
-
--- 從快取組全量分包，入送包佇列。target=nil → 廣播；target=player → 對該玩家。
--- 空快取仍送一包（tot=1,count=0,zones={}）→ client 原子套用空集（檔案刪除→客戶端清空）。
+-- zoneCache 的全量分包。空快取仍是一包（count=0）→ client 原子套用空集（檔案刪除→客戶端清空）。
 -- B1：以 wire byte budget（maxPacketWireBytes）分包，非只數 zone 數——單 zone 已於
 -- validateZones 保證 <= maxZoneWireBytes <= budget，確保任一包遠低於引擎 1MB buffer。
-local function enqueueFullSync(target)
-    purgeQueuedFor(target)  -- C1：同 target 舊全量作廢，換上新的
-
+local function packedPackets()
+    if packedCache then return packedCache end
     local zones = zoneCache
     local n = #zones
     local budget = MinidoracatZonesShared.LIMITS.maxPacketWireBytes
@@ -131,6 +116,37 @@ local function enqueueFullSync(target)
         end
         if #pkt > 0 then packets[#packets + 1] = pkt end
     end
+    packedCache = packets
+    return packets
+end
+
+-- 全量入送包佇列。target=nil → 廣播；target=player → 對該玩家。先到先送，送出第一包的批次整批送完：
+--   · 廣播：佇列裡還沒開始送的批次（舊廣播、玩家的請求）全部被它取代——廣播送給每條連線
+--     （GameServer.sendServerCommand(module,command,args) 不篩連線，42.22.2 :3531-3536），
+--     排隊中的玩家會從廣播拿到較新的內容（client 以較新的 bid 為準）。只留佇列頭已送出幾包的那一批
+--     送完：砍掉會讓收件人留下集不滿的批次，要等 STALE_MS 才補要一整批。
+--   · 單一玩家：已有一批在排就不再排——重送的請求不重排、不重打包。
+-- 除此之外不丟、不拒收、不設包數或批數上限：
+--   · 廣播被丟：已同步的玩家沒收到任何一包，不會補要，停在舊區域到下次改檔。
+--   · 單一玩家批次被丟或不收：進場重送只有 12 次，重型檔（maxZones 下單批可到約 143 包、
+--     每秒約送 20 包）加上多人同時進場，排在後面的玩家會用完次數、整場沒有區域。
+-- 記憶體：佇列裡最多兩版內容（佇列頭在送的那批＋目前的 packedCache），每批只多 tot 個小 table；
+-- 包數上界＝(有批次在排的玩家物件數＋2)×每批包數。請求端另有每玩家 REQUEST_COOLDOWN_MS 冷卻。
+local function enqueueFullSync(target)
+    if target == nil then
+        -- 佇列只從頭送、同一批整批相鄰入列 → 只有佇列頭那一批可能已在送（seq>1）
+        local head = sendQueue[1]
+        local sendingBid = head and head.args.seq > 1 and head.args.bid or nil
+        local kept = {}
+        for i = 1, #sendQueue do
+            local e = sendQueue[i]
+            if e.args.bid == sendingBid then kept[#kept + 1] = e end
+        end
+        sendQueue = kept
+    elseif hasQueued(target) then
+        return
+    end
+    local packets = packedPackets()
     local bid = nextBid()
     local tot = #packets
     for i = 1, tot do
@@ -138,28 +154,6 @@ local function enqueueFullSync(target)
             target = target,
             args = { bid = bid, seq = i, tot = tot, count = #packets[i], zones = packets[i] },
         }
-    end
-    -- C1：送包佇列硬上限——以「整批」為淘汰單位（非逐包）。逐包丟最舊會把某廣播批次的前段 seq
-    -- 丟掉、留下殘缺批次，client 永遠集不滿又收不到重送（廣播只在 hash 變化時發）→ 該 client 停在
-    -- 舊區域。改為整批淘汰：取最舊 entry 的 (target,bid)，移除佇列中所有同批 entry，重複到佇列回落
-    -- 上限內。整批消失可被 client STALE 逾時後重發 requestZones 補救，殘缺批次則不會。
-    while #sendQueue > MAX_SEND_QUEUE do
-        local oldest = sendQueue[1]
-        local dropKey = keyOf(oldest.target)
-        local dropBid = oldest.args.bid
-        local kept = {}
-        local dropped = 0
-        for i = 1, #sendQueue do
-            local e = sendQueue[i]
-            if keyOf(e.target) == dropKey and e.args.bid == dropBid then
-                dropped = dropped + 1
-            else
-                kept[#kept + 1] = e
-            end
-        end
-        sendQueue = kept
-        log("send queue exceeded " .. MAX_SEND_QUEUE .. ", dropped whole batch bid=" .. tostring(dropBid)
-            .. " (" .. dropped .. " packet(s)) (requestZones overload?)")
     end
 end
 
@@ -227,9 +221,10 @@ local function pollNow(force)
         disabledCount = result.disabledCount or 0
     end
 
-    -- 原子替換快取
+    -- 原子替換快取（分包快取一起作廢）
     zoneCache = zones
     zoneCacheCount = #zones
+    packedCache = nil
     for i = 1, #errors do
         log(errors[i])
     end
@@ -251,7 +246,8 @@ local function onTick()
     if not isServer() then return end
     local sent = 0
     while sent < MAX_PACKETS_PER_TICK and #sendQueue > 0 do
-        -- ponytail: table.remove(,1) O(n)；佇列僅數包，長到值得換 head-index 再說
+        -- ponytail: table.remove(,1) O(n)；常態數包，重型檔加十幾位玩家同時進場可到數千包、每 tick
+        -- 也只搬兩次，長到量得出來再換 head-index
         local job = table.remove(sendQueue, 1)
         if job.target then
             sendServerCommand(job.target, MODULE, "zoneData", job.args)
@@ -332,12 +328,12 @@ Events.OnClientCommand.Add(function(module, command, player, args)
     if not player then return end
 
     if command == "requestZones" then
-        -- C1：per-player 冷卻，<3s 內重複請求忽略（防 DoS：每次全快取重打包＋佇列膨脹）
+        -- C1：per-player 冷卻，<3s 內重複請求忽略（防洗請求）
         local now = getTimestampMs()
         local last = lastServedMs[player]
         if last and (now - last) < REQUEST_COOLDOWN_MS then return end
         lastServedMs[player] = now
-        -- 新進玩家中途進服 → 送當前快取全量（AC-1）。同玩家舊全量由 enqueueFullSync 內 purge coalescing。
+        -- 新進玩家中途進服 → 送當前快取全量（AC-1）。該玩家已有一批在排時 enqueueFullSync 不重排。
         enqueueFullSync(player)
 
     elseif command == "reloadZones" then

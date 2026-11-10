@@ -54,7 +54,7 @@ function MinidoracatZonesShared.zonesLegacyPath()
 end
 
 MinidoracatZonesShared.LIMITS = {
-    maxZones = 500,
+    maxZones = 1000,
     maxRectsPerZone = 64,
     maxMetaBytes = 2048,
     maxFileBytes = 1000000,
@@ -179,7 +179,7 @@ local function estimateWireBytes(v)
     return WIRE_TYPE_TAG  -- nil/function 等：保底
 end
 
--- 公開：估一個 wire table 的序列化 byte 數（server 分包 budget 用，見 enqueueFullSync）。
+-- 公開：估一個 wire table 的序列化 byte 數（server 分包 budget 用，見 server packedPackets）。
 -- validator（validateOneZone）與 server 分包共用此函式＝「三處同一套 byte 計算」。
 MinidoracatZonesShared.wireBytes = estimateWireBytes
 

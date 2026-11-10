@@ -233,19 +233,30 @@ check("validator(enabled): enabled 非 boolean（字串 yes）→ 記 error 並�
         "error 訊息應含 'enabled must be a boolean'，得到 " .. result.errors[1])
 end)
 
-check("validator(enabled): disabled 不佔 maxZones 上限（501 個含 2 disabled → 不觸截斷）", function()
+check("validator(maxZones): 恰到上限全收、多一筆截斷；disabled 不佔上限", function()
+    local max = MinidoracatZonesShared.LIMITS.maxZones
+    local function truncated(result)
+        for _, e in ipairs(result.errors) do
+            if e:find("truncated", 1, true) then return true end
+        end
+        return false
+    end
+    -- max+2 筆、其中 2 筆 disabled → 顯示中恰 max 筆：全收、不截斷
     local raw = {}
-    for i = 1, 501 do raw[i] = goodZone({ name = "Z" .. i }) end
+    for i = 1, max + 2 do raw[i] = goodZone({ name = "Z" .. i }) end
     raw[100].enabled = false
     raw[300].enabled = false
-    local result = MinidoracatZonesShared.validateZones(raw)
-    assert(result.count == 499, "499 個顯示中的 zone 應全過，得到 " .. result.count)
-    assert(result.disabledCount == 2, "disabledCount 應為 2，得到 " .. tostring(result.disabledCount))
-    local truncated = false
-    for _, e in ipairs(result.errors) do
-        if e:find("truncated", 1, true) then truncated = true end
-    end
-    assert(not truncated, "499 顯示 zone 未達 500 上限，不應截斷")
+    local atLimit = MinidoracatZonesShared.validateZones(raw)
+    assert(atLimit.count == max, "顯示中恰 " .. max .. " 筆應全收，得到 " .. atLimit.count)
+    assert(atLimit.disabledCount == 2, "disabledCount 應為 2，得到 " .. tostring(atLimit.disabledCount))
+    assert(not truncated(atLimit), "恰到上限不應截斷")
+    assert(atLimit.zones[max].name == "Z" .. (max + 2), "最後一筆應是輸入的最後一筆（disabled 不佔位）")
+    -- 再多一筆顯示中的 → 只收前 max 筆並記截斷
+    raw[max + 3] = goodZone({ name = "Z" .. (max + 3) })
+    local over = MinidoracatZonesShared.validateZones(raw)
+    assert(over.count == max, "超過上限應只收 " .. max .. " 筆，得到 " .. over.count)
+    assert(truncated(over), "超過上限應記 truncated")
+    assert(over.zones[max].name == "Z" .. (max + 2), "截斷應丟掉最後一筆、保留前面的")
 end)
 
 check("validator(fix1): zones 欄位非陣列 → fatal＋errors≥1＋count 0（呼叫端保留舊快取）", function()
@@ -1851,46 +1862,149 @@ check("server(fix1): zones 非陣列（fatal）→ 保留舊快取、不清空�
     assert(not broadcast, "fatal 不應廣播 zoneData（不清空既有 client）")
 end)
 
--- fix4：送包佇列整批淘汰——製造超過 MAX_SEND_QUEUE 的多批 enqueue，斷言佇列內無殘缺批次
-check("server(fix4): 送包佇列整批淘汰，佇列內無殘缺批次（每組包數==tot）", function()
-    local state = newServerHarness()
-    -- 每 zone 64 rects 撐大 wire → 每批分成多包（校準：60 zone ≈ 6 包/批）
-    local rectsJson = {}
-    for r = 1, 64 do rectsJson[r] = string.format("[%d,%d,%d,%d]", r, r, r + 1, r + 1) end
-    local rectsStr = "[" .. table.concat(rectsJson, ",") .. "]"
-    local zones = {}
-    for i = 1, 60 do zones[i] = string.format('{"name":"Z%d","rects":%s}', i, rectsStr) end
-    state.fileContent = "[" .. table.concat(zones, ",") .. "]"
-    state.handlers.onServerStarted()
-    for _ = 1, 100 do state.handlers.onTick() end  -- 沖掉暖啟動廣播
-    -- 40 個不同 player 物件各自 requestZones → 各入一批（≈6 包）；40×6=240 > MAX_SEND_QUEUE(128)
-    -- → 觸發整批淘汰。不同物件參照 → 不同 target key，彼此不 purge。此段無 onTick 故無中途送包。
-    for p = 1, 40 do
-        state.handlers.onClientCommand("MinidoracatMiniMapZones", "requestZones", { id = p }, {})
-    end
-    -- 排乾佇列並捕捉（onTick ≤2 包/tick；getTimestampMs=0 故不會中途重新輪詢造成新批次）
+-- 送包佇列（fix4 原為「滿了整批淘汰」，maxZones 提高後改成不丟批次、先到先送）。
+-- 依送出順序整理：order＝各 target 第一包出現的順序（廣播記成 "broadcast"），count＝各 target 包數。
+local function drainServerQueue(state, ticks)
     state.sent = {}
-    for _ = 1, 400 do state.handlers.onTick() end
-    -- 以 (target,bid) 分組：per-player 送包 call=(player,MODULE,"zoneData",args)
-    local groups = {}
+    for _ = 1, ticks do state.handlers.onTick() end
+    local order, count, last = {}, {}, {}
     for _, call in ipairs(state.sent) do
-        if call[2] == "MinidoracatMiniMapZones" and call[3] == "zoneData" then
-            local args = call[4]
-            local key = tostring(call[1]) .. "#" .. tostring(args.bid)
-            local g = groups[key]
-            if not g then g = { count = 0, tot = args.tot }; groups[key] = g end
-            g.count = g.count + 1
+        local target, args
+        if call[2] == "zoneData" then
+            target, args = "broadcast", call[3]
+        elseif call[3] == "zoneData" then
+            target, args = call[1], call[4]
+        end
+        if target then
+            if not count[target] then
+                count[target] = 0
+                order[#order + 1] = target
+            end
+            count[target] = count[target] + 1
+            last[target] = args
         end
     end
-    -- 不變式：每個殘存批次都完整（count==tot）；被淘汰的批次一包不送（不在 groups）
-    local surviving = 0
-    for key, g in pairs(groups) do
-        assert(g.count == g.tot, "批次 " .. key .. " 殘缺：" .. g.count .. "/" .. tostring(g.tot) .. " 包")
-        surviving = surviving + 1
+    return order, count, last
+end
+
+-- 每 zone 64 rects 撐大 wire：n 筆約 n/10 包
+local function heavyZonesJson(n)
+    local rects = {}
+    for r = 1, 64 do rects[r] = "[0,0,1,1]" end
+    local body = '","rects":[' .. table.concat(rects, ",") .. "]}"
+    local parts = {}
+    for i = 1, n do parts[i] = '{"name":"Z' .. i .. body end
+    return "[" .. table.concat(parts, ",") .. "]"
+end
+
+check("server(maxZones): 重型檔＋多人同時進場 → 廣播與每位玩家都整批收到、先到先送", function()
+    -- 上限筆數、每筆 64 rects：每批約 100 包。廣播入列後、送出前湧進 40 個 requestZones（共約 4,100 包）。
+    -- 丟掉廣播：已同步的玩家沒收到任何一包、不會補要，停在舊區域。丟掉或不收玩家的批次：進場重送
+    -- 只有 12 次，排在後面的玩家會用完次數。
+    local state = newServerHarness()
+    state.fileContent = heavyZonesJson(MinidoracatZonesShared.LIMITS.maxZones)
+    state.handlers.onServerStarted()  -- 首讀＝廣播一批入列，還沒 onTick
+    local players = {}
+    for p = 1, 40 do
+        players[p] = { id = p }
+        state.handlers.onClientCommand("MinidoracatMiniMapZones", "requestZones", players[p], {})
     end
-    -- 淘汰確實發生（總包數遠超 128，不可能 40 批全存活），但也不會全清光
-    assert(surviving < 40, "應有批次被整批淘汰，卻全部存活（" .. surviving .. " 批）")
-    assert(surviving > 0, "不應把所有批次都淘汰光（" .. surviving .. " 批）")
+    -- 還在排隊的玩家重送（client 每 10 秒一次；時鐘撥過 3 秒冷卻、不到輪詢間隔）：不重排、不多送
+    _G.getTimestampMs = function() return 10000 end
+    state.handlers.onClientCommand("MinidoracatMiniMapZones", "requestZones", players[1], {})
+    local order, count, last = drainServerQueue(state, 3000)
+    local tot = last.broadcast and last.broadcast.tot
+    assert(tot and tot > 64, "這份檔每批要夠大才測得到，每批 " .. tostring(tot) .. " 包")
+    assert(count.broadcast == tot, "廣播應整批送出，得到 " .. count.broadcast .. "/" .. tot .. " 包")
+    assert(order[1] == "broadcast", "廣播先入列，應先送")
+    for p = 1, 40 do
+        assert(count[players[p]] == tot, "玩家 " .. p .. " 應恰好收到一整批，得到 " .. tostring(count[players[p]]) .. "/" .. tot .. " 包")
+        assert(order[p + 1] == players[p], "先到先送：第 " .. p .. " 位請求的玩家應排第 " .. p .. " 個")
+    end
+    -- 每批共用同一份分包：佇列不設上限的前提（否則 41 批各握一份 64,000 個矩形）
+    assert(last[players[1]].zones == last[players[40]].zones, "各批的 zone 資料應是同一份 table")
+end)
+
+check("server: 請求排著隊時改檔 → 廣播取代還沒開始送的請求、在送的那批送完、之後的請求拿到新內容", function()
+    -- 排隊中的玩家批次各握一份舊分包；不取代的話，排隊期間每改一次檔就多留一整份。廣播送給每條
+    -- 連線，排隊中的玩家會從廣播拿到新內容。
+    local state = newServerHarness()
+    state.fileContent = heavyZonesJson(60)  -- 約 6 包/批
+    state.handlers.onServerStarted()
+    drainServerQueue(state, 100)  -- 送掉開機廣播
+    local players = {}
+    for p = 1, 20 do
+        players[p] = { id = p }
+        state.handlers.onClientCommand("MinidoracatMiniMapZones", "requestZones", players[p], {})
+    end
+    state.sent = {}
+    state.handlers.onTick()  -- 玩家 1 的批次送出前 2 包
+    -- 管理員改檔並 /reloadzones
+    state.fileContent = '[{"name":"NEW","rects":[[0,0,1,1]]}]'
+    local admin = { getRole = function() return { hasCapability = function() return true end } end }
+    state.handlers.onClientCommand("MinidoracatMiniMapZones", "reloadZones", admin, {})
+    local late = { id = "late" }
+    state.handlers.onClientCommand("MinidoracatMiniMapZones", "requestZones", late, {})
+    local before = state.sent
+    local order, count, last = drainServerQueue(state, 400)
+    local first = 0
+    for _, call in ipairs(before) do
+        if call[1] == players[1] and call[3] == "zoneData" then first = first + 1 end
+    end
+    assert(first == 2 and last[players[1]] and count[players[1]] + first == last[players[1]].tot,
+        "在送的玩家 1 那批應整批送完，得到 " .. first .. "+" .. tostring(count[players[1]]) .. " 包")
+    for p = 2, 20 do
+        assert(count[players[p]] == nil, "還沒開始送的玩家 " .. p .. " 批次應被廣播取代，卻送了 " .. tostring(count[players[p]]) .. " 包")
+    end
+    assert(order[1] == players[1] and order[2] == "broadcast", "廣播應緊接在送完的那批之後")
+    assert(count.broadcast == 1 and MinidoracatZonesShared.unpackZone(last.broadcast.zones[1]).name == "NEW",
+        "改檔的廣播應整批送出且是新內容，得到 " .. tostring(count.broadcast) .. " 包")
+    assert(last.broadcast.bid > last[players[1]].bid, "廣播的 bid 要比舊批次新，client 才會以它為準")
+    assert(count[late] == 1 and MinidoracatZonesShared.unpackZone(last[late].zones[1]).name == "NEW",
+        "改檔後才請求的玩家應拿到新內容，得到 " .. tostring(count[late]) .. " 包")
+end)
+
+check("server: 連續改檔 → 還沒開始送的舊廣播被新的取代、已送出幾包的舊廣播整批送完", function()
+    local state = newServerHarness()
+    local admin = { getRole = function() return { hasCapability = function() return true end } end }
+    local function reload(name)
+        state.fileContent = heavyZonesJson(60):gsub('"Z1"', '"' .. name .. '"', 1)
+        state.handlers.onClientCommand("MinidoracatMiniMapZones", "reloadZones", admin, {})
+    end
+    -- 依送出順序列出廣播批次（以第一包的第一個區域名稱辨認內容），並確認每批整批送完
+    local function sentBroadcasts()
+        local perBid, batches = {}, {}
+        for _, call in ipairs(state.sent) do
+            if call[2] == "zoneData" then
+                local a = call[3]
+                perBid[a.bid] = (perBid[a.bid] or 0) + 1
+                if a.seq == 1 then
+                    batches[#batches + 1] = { bid = a.bid, tot = a.tot, name = MinidoracatZonesShared.unpackZone(a.zones[1]).name }
+                end
+            end
+        end
+        for _, b in ipairs(batches) do
+            assert(b.tot > 2 and perBid[b.bid] == b.tot, "廣播 " .. b.name .. " 應整批送完，得到 " .. perBid[b.bid] .. "/" .. b.tot .. " 包")
+        end
+        return batches
+    end
+    -- (1) 開機廣播 A 還沒送 → 改檔 B：只送 B
+    state.fileContent = heavyZonesJson(60)  -- 約 6 包/批
+    state.handlers.onServerStarted()
+    reload("B")
+    drainServerQueue(state, 100)
+    local batches = sentBroadcasts()
+    assert(#batches == 1 and batches[1].name == "B", "還沒開始送的舊廣播應被取代，只送 B，得到 " .. #batches .. " 批")
+    -- (2) 廣播 C 送出前 2 包 → 改檔 D → 再改檔 E：C 送完，D 被 E 取代
+    reload("C")
+    state.sent = {}
+    state.handlers.onTick()
+    reload("D")
+    reload("E")
+    for _ = 1, 100 do state.handlers.onTick() end
+    batches = sentBroadcasts()
+    assert(#batches == 2 and batches[1].name == "C" and batches[2].name == "E",
+        "應依序送出 C、E 兩批，得到 " .. #batches .. " 批")
 end)
 
 -------------------------------------------------------------------------------
@@ -2086,6 +2200,81 @@ check("client(fix5): 同 process 重登（OnGameStart 重入）重置 satisfied�
         { bid = 1, seq = 1, tot = 1, count = 0, zones = {} })
     assert(state.providerFn() ~= before,
         "重登後 server 重啟的低 bid 全量應被套用（lastAppliedBid 未歸零＝被判 stale）")
+end)
+
+check("client: 下一批的前幾包比這批最後一包先到 → 這批套用後下一批照樣集滿套用", function()
+    -- server 送完一批緊接著送下一批（在送的批次後面接新廣播）；ClientCommand 無序，下一批的包可能先到
+    local state = newClientHarness()
+    state.handlers.onGameStart()
+    local function pkt(bid, seq, tot, name)
+        local zone = MinidoracatZonesShared.validateZones({ { name = name, rects = { { 0, 0, 1, 1 } } } }).zones[1]
+        state.handlers.onServerCommand("MinidoracatMiniMapZones", "zoneData",
+            { bid = bid, seq = seq, tot = tot, count = 1, zones = { MinidoracatZonesShared.packZone(zone) } })
+    end
+    pkt(6, 1, 2, "older")  -- 較舊、沒送完的批次（之後被 bid 7 取代）
+    pkt(7, 1, 2, "old")
+    pkt(8, 1, 2, "new")  -- 下一批的第 1 包先到
+    pkt(7, 2, 2, "old")  -- 這批集滿套用
+    assert(state.providerFn()[1].name == "old", "bid 7 應先套用")
+    pkt(8, 2, 2, "new")
+    local zones = state.providerFn()
+    assert(#zones == 2 and zones[1].name == "new", "bid 8 應集滿套用（先到的第 1 包不能被清掉）")
+    -- 套用時要清掉 bid ≤ 本批的批次（bid 6 已被取代；bid 8 自己也要移出）；留著的話 STALE 逾時會補要一整批全量
+    state.sent = {}
+    state.nowMs = (state.nowMs or 0) + 100000
+    state.handlers.everyMinute()
+    for _, call in ipairs(state.sent) do
+        assert(call[3] ~= "requestZones", "已套用較新的全量，不應因舊的未完成批次逾時而補要")
+    end
+end)
+
+-- maxZones 筆經真 server（讀檔→驗證→分包→送包佇列）→ 真 client（倒序收包重組）。
+-- 回傳 server 送出的 zoneData 包與 client provider 拿到的 zone 陣列。
+local function roundTripAtMaxZones(zoneJson)
+    local server = newServerHarness()
+    local max = MinidoracatZonesShared.LIMITS.maxZones
+    local parts = {}
+    for i = 1, max do parts[i] = zoneJson(i) end
+    server.fileContent = "[" .. table.concat(parts, ",") .. "]"
+    server.handlers.onServerStarted()
+    for _ = 1, max do server.handlers.onTick() end  -- ≤2 包/tick、tot ≤ max：必排乾
+    local packets = {}
+    for _, call in ipairs(server.sent) do
+        if call[2] == "zoneData" then packets[#packets + 1] = call[3] end
+    end
+    local client = newClientHarness()
+    for i = #packets, 1, -1 do  -- RELIABLE 但無序：倒著餵
+        client.handlers.onServerCommand("MinidoracatMiniMapZones", "zoneData", packets[i])
+    end
+    return packets, client.providerFn()
+end
+
+check("sync(maxZones): 上限筆數、名稱貼上限 → 一筆不漏送到 client", function()
+    local max = MinidoracatZonesShared.LIMITS.maxZones
+    local pad = string.rep("N", MinidoracatZonesShared.LIMITS.maxNameBytes - 4)
+    local packets, zones = roundTripAtMaxZones(function(i)
+        return string.format('{"name":"%s%04d","rects":[[%d,0,%d,2]],"category":"C%d"}',
+            pad, i, i, i + 48, i % 9)
+    end)
+    assert(#packets == packets[1].tot, "送出的包數應等於 tot，得到 " .. #packets .. "/" .. packets[1].tot)
+    assert(#zones == max, "client 應拿到 " .. max .. " 筆，得到 " .. #zones)
+    assert(zones[1].name == pad .. "0001" and zones[max].name == pad .. string.format("%04d", max),
+        "倒序收包後順序應照 seq 還原")
+    assert(zones[max].rects[1].x1 == max and zones[max].category == "C" .. (max % 9), "欄位過 wire 不變")
+end)
+
+check("sync(maxZones): 合規重型檔單批超過百包 → 整批仍送達", function()
+    -- 每 zone 64 rects＋貼近 maxMetaBytes 的 meta：檔案仍 <1MB，單批約 143 包。
+    -- 送包佇列照包數設上限（舊版 128 包）的話，這份檔永遠送不到任何 client。
+    local max = MinidoracatZonesShared.LIMITS.maxZones
+    local rects, nums = {}, {}
+    for r = 1, 64 do rects[r] = "[0,0,1,1]" end
+    for k = 1, 100 do nums[k] = "0" end
+    local body = '","rects":[' .. table.concat(rects, ",") .. '],"meta":{"a":[' .. table.concat(nums, ",") .. "]}}"
+    local packets, zones = roundTripAtMaxZones(function(i) return '{"name":"' .. i .. body end)
+    assert(#zones == max, "client 應拿到 " .. max .. " 筆，得到 " .. #zones .. "（送出 " .. #packets .. " 包）")
+    assert(#packets > 128, "這份檔要能撐破送包佇列上限才測得到，得到 " .. #packets .. " 包")
+    assert(#zones[max].rects == 64 and #zones[max].meta.a == 100, "rects 與 meta 過 wire 不變")
 end)
 
 -------------------------------------------------------------------------------
