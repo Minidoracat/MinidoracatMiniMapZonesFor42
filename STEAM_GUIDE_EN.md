@@ -95,8 +95,8 @@ The file is JSON, read as UTF-8, so zone names can be in any language.
 [h3]Other rules[/h3]
 [list]
 [*] [b]Building-sized zones[/b] (longest side of the whole zone 100 tiles or less): simplify automatically with zoom — a single block at mid zoom, hidden when zoomed far out, full detail up close. No field needed.
-[*] [b]Limits[/b]: up to 1000 zones, up to 64 rectangles per zone, and a file size of about 1 MB.
-[*] [b]Mistakes[/b]: malformed or over-limit zones are skipped and logged in the server log; the other zones still show.
+[*] [b]Limits[/b]: up to 2000 zones, up to 64 rectangles per zone, and a file size of about 1 MB. With many zones you hit the file size limit first (2000 zones leave about 500 bytes each), so save the file as compact JSON without indentation.
+[*] [b]Mistakes[/b]: malformed zones, or zones past the count limit, are skipped and logged in the server log; the other zones still show. A file larger than about 1 MB is not loaded at all (it is logged) and the map keeps the zones from the last successful load; if the file is too large when the server starts, no custom zones show.
 [*] [b]External tools[/b]: event-area tools, reset-zone marker tools, etc. can write zones.json directly.
 [*] [b]Full format reference[/b]: [url=https://github.com/Minidoracat/MinidoracatMiniMapZonesFor42]GitHub README[/url]
 [/list]

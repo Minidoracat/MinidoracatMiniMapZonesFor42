@@ -54,7 +54,7 @@ function MinidoracatZonesShared.zonesLegacyPath()
 end
 
 MinidoracatZonesShared.LIMITS = {
-    maxZones = 1000,
+    maxZones = 2000,
     maxRectsPerZone = 64,
     maxMetaBytes = 2048,
     maxFileBytes = 1000000,

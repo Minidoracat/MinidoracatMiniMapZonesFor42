@@ -1862,6 +1862,33 @@ check("server(fix1): zones 非陣列（fatal）→ 保留舊快取、不清空�
     assert(not broadcast, "fatal 不應廣播 zoneData（不清空既有 client）")
 end)
 
+check("server: zones.json 超過檔案上限 → 保留舊快取、不清空不廣播", function()
+    -- 上限筆數 × 長名稱會先撞到 maxFileBytes：整檔不載入（不是截斷），已載入的區域要留著
+    local state = newServerHarness()
+    state.fileContent = '[{"name":"Z1","rects":[[0,0,10,10]]}]'
+    state.handlers.onServerStarted()
+    for _ = 1, 5 do state.handlers.onTick() end  -- 沖掉暖啟動廣播
+    local name = string.rep("N", MinidoracatZonesShared.LIMITS.maxNameBytes)
+    local parts = {}
+    for i = 1, MinidoracatZonesShared.LIMITS.maxZones do
+        parts[i] = '{"name":"' .. name .. '","rects":[[0,0,10,10]]}'
+    end
+    state.fileContent = "[" .. table.concat(parts, ",\n") .. "]"
+    assert(#state.fileContent > MinidoracatZonesShared.LIMITS.maxFileBytes, "測試資料要超過檔案上限")
+    state.sent = {}
+    local player = { getRole = function() return { hasCapability = function() return true end } end }
+    state.handlers.onClientCommand("MinidoracatMiniMapZones", "reloadZones", player, {})
+    for _ = 1, 5 do state.handlers.onTick() end
+    local reloadResult, broadcast = nil, false
+    for _, call in ipairs(state.sent) do
+        if call[3] == "reloadResult" then reloadResult = call[4] end
+        if call[2] == "zoneData" then broadcast = true end
+    end
+    assert(reloadResult and reloadResult.ok == false, "超過檔案上限應回 ok=false")
+    assert(reloadResult.count == 1, "快取應保留原本 1 筆，得到 " .. tostring(reloadResult.count))
+    assert(not broadcast, "超過檔案上限不應廣播 zoneData（不清空既有 client）")
+end)
+
 -- 送包佇列（fix4 原為「滿了整批淘汰」，maxZones 提高後改成不丟批次、先到先送）。
 -- 依送出順序整理：order＝各 target 第一包出現的順序（廣播記成 "broadcast"），count＝各 target 包數。
 local function drainServerQueue(state, ticks)
@@ -1897,12 +1924,12 @@ local function heavyZonesJson(n)
     return "[" .. table.concat(parts, ",") .. "]"
 end
 
-check("server(maxZones): 重型檔＋多人同時進場 → 廣播與每位玩家都整批收到、先到先送", function()
-    -- 上限筆數、每筆 64 rects：每批約 100 包。廣播入列後、送出前湧進 40 個 requestZones（共約 4,100 包）。
-    -- 丟掉廣播：已同步的玩家沒收到任何一包、不會補要，停在舊區域。丟掉或不收玩家的批次：進場重送
-    -- 只有 12 次，排在後面的玩家會用完次數。
+check("server(重型檔): 多人同時進場 → 廣播與每位玩家都整批收到、先到先送", function()
+    -- 1000 筆、每筆 64 rects（約 665KB，檔案上限 1MB 內）：每批約 100 包。廣播入列後、送出前湧進
+    -- 40 個 requestZones（共約 4,100 包）。丟掉廣播：已同步的玩家沒收到任何一包、不會補要，停在
+    -- 舊區域。丟掉或不收玩家的批次：進場重送只有 12 次，排在後面的玩家會用完次數。
     local state = newServerHarness()
-    state.fileContent = heavyZonesJson(MinidoracatZonesShared.LIMITS.maxZones)
+    state.fileContent = heavyZonesJson(1000)
     state.handlers.onServerStarted()  -- 首讀＝廣播一批入列，還沒 onTick
     local players = {}
     for p = 1, 40 do
@@ -2228,16 +2255,17 @@ check("client: 下一批的前幾包比這批最後一包先到 → 這批套用
     end
 end)
 
--- maxZones 筆經真 server（讀檔→驗證→分包→送包佇列）→ 真 client（倒序收包重組）。
+-- count 筆經真 server（讀檔→驗證→分包→送包佇列）→ 真 client（倒序收包重組）。
 -- 回傳 server 送出的 zoneData 包與 client provider 拿到的 zone 陣列。
-local function roundTripAtMaxZones(zoneJson)
+local function roundTrip(count, zoneJson)
     local server = newServerHarness()
-    local max = MinidoracatZonesShared.LIMITS.maxZones
     local parts = {}
-    for i = 1, max do parts[i] = zoneJson(i) end
+    for i = 1, count do parts[i] = zoneJson(i) end
     server.fileContent = "[" .. table.concat(parts, ",") .. "]"
+    assert(#server.fileContent < MinidoracatZonesShared.LIMITS.maxFileBytes,
+        "測試資料要在檔案上限內，得到 " .. #server.fileContent .. " bytes")
     server.handlers.onServerStarted()
-    for _ = 1, max do server.handlers.onTick() end  -- ≤2 包/tick、tot ≤ max：必排乾
+    for _ = 1, count do server.handlers.onTick() end  -- ≤2 包/tick、tot ≤ count：必排乾
     local packets = {}
     for _, call in ipairs(server.sent) do
         if call[2] == "zoneData" then packets[#packets + 1] = call[3] end
@@ -2249,10 +2277,12 @@ local function roundTripAtMaxZones(zoneJson)
     return packets, client.providerFn()
 end
 
-check("sync(maxZones): 上限筆數、名稱貼上限 → 一筆不漏送到 client", function()
+check("sync(maxZones): 上限筆數、名稱長到檔案上限容許的最大 → 一筆不漏送到 client", function()
     local max = MinidoracatZonesShared.LIMITS.maxZones
-    local pad = string.rep("N", MinidoracatZonesShared.LIMITS.maxNameBytes - 4)
-    local packets, zones = roundTripAtMaxZones(function(i)
+    -- 每筆固定部分約 60 bytes；名稱補到整檔約 0.9MB（不超過 maxNameBytes）
+    local padLen = math.min(MinidoracatZonesShared.LIMITS.maxNameBytes - 4, math.floor(900000 / max) - 60)
+    local pad = string.rep("N", padLen)
+    local packets, zones = roundTrip(max, function(i)
         return string.format('{"name":"%s%04d","rects":[[%d,0,%d,2]],"category":"C%d"}',
             pad, i, i, i + 48, i % 9)
     end)
@@ -2263,18 +2293,18 @@ check("sync(maxZones): 上限筆數、名稱貼上限 → 一筆不漏送到 cli
     assert(zones[max].rects[1].x1 == max and zones[max].category == "C" .. (max % 9), "欄位過 wire 不變")
 end)
 
-check("sync(maxZones): 合規重型檔單批超過百包 → 整批仍送達", function()
-    -- 每 zone 64 rects＋貼近 maxMetaBytes 的 meta：檔案仍 <1MB，單批約 143 包。
+check("sync(重型檔): 合規重型檔單批超過百包 → 整批仍送達", function()
+    -- 1000 筆、每 zone 64 rects＋100 個數字的 meta：檔案仍 <1MB，這份檔單批約 143 包。
     -- 送包佇列照包數設上限（舊版 128 包）的話，這份檔永遠送不到任何 client。
-    local max = MinidoracatZonesShared.LIMITS.maxZones
+    local count = 1000
     local rects, nums = {}, {}
     for r = 1, 64 do rects[r] = "[0,0,1,1]" end
     for k = 1, 100 do nums[k] = "0" end
     local body = '","rects":[' .. table.concat(rects, ",") .. '],"meta":{"a":[' .. table.concat(nums, ",") .. "]}}"
-    local packets, zones = roundTripAtMaxZones(function(i) return '{"name":"' .. i .. body end)
-    assert(#zones == max, "client 應拿到 " .. max .. " 筆，得到 " .. #zones .. "（送出 " .. #packets .. " 包）")
-    assert(#packets > 128, "這份檔要能撐破送包佇列上限才測得到，得到 " .. #packets .. " 包")
-    assert(#zones[max].rects == 64 and #zones[max].meta.a == 100, "rects 與 meta 過 wire 不變")
+    local packets, zones = roundTrip(count, function(i) return '{"name":"' .. i .. body end)
+    assert(#zones == count, "client 應拿到 " .. count .. " 筆，得到 " .. #zones .. "（送出 " .. #packets .. " 包）")
+    assert(#packets > 128, "這份檔要能撐破舊的送包佇列上限才測得到，得到 " .. #packets .. " 包")
+    assert(#zones[count].rects == 64 and #zones[count].meta.a == 100, "rects 與 meta 過 wire 不變")
 end)
 
 -------------------------------------------------------------------------------

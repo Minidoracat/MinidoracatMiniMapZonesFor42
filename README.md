@@ -32,8 +32,9 @@
   `zones.<時間戳>.bak.json` 再覆寫；伺服器上需「管理模組」權限
 - **`/reloadzones`**：管理員聊天指令，立即強制重讀＋全體廣播（單機走本地重讀）
 - **`enabled` 欄位**：`"enabled": false` 保留座標暫時隱藏，不必刪除
-- **壞資料容錯**：錯誤條目跳過並記錄，不影響其他區域；上限：總數 ≤1000、
-  單區域 rects ≤64
+- **壞資料容錯**：錯誤條目跳過並記錄，不影響其他區域；上限：總數 ≤2000、
+  單區域 rects ≤64、整檔 ≤約 1 MB（超過時整個檔案不載入，沿用已載入的區域；
+  2000 個區域平均每個約 500 bytes，區域多時請存成不縮排的 JSON）
 
 ## 截圖
 
@@ -87,7 +88,7 @@
 
 ## 測試
 
-- `lua scripts/tests/test_zones_lua.lua`：113 案例（validator 上限／分包／權限守衛／
+- `lua scripts/tests/test_zones_lua.lua`：114 案例（validator 上限／分包／權限守衛／
   範本生成／備份語意／SP fallback／寫檔副檔名白名單與 legacy 遷移狀態機）
 - `python scripts/tests/test_kahlua_globals.py`：Kahlua 缺失全域（next）靜態守衛
 - `python scripts/tests/test_tpl_strings.py`：四語範本常數與 UI.json 逐字鎖定

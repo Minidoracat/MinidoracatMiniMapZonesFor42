@@ -60,7 +60,7 @@ boot 冒煙兩輪、500 zone 分包壓測、壞 JSON 三態）已在 US-009 通�
 > 輸入 schema：`rects` 為 `[[x1,y1,x2,y2], ...]`（需 x2>x1、y2>y1）；`fill`/`border` 可用
 > `"#RRGGBB"` 或 `[r,g,b]`；`fillAlpha`/`borderAlpha` 0–1（也接受 `alpha` 別名，缺 `fillAlpha` 時採用）；
 > `category` 選填；`enabled` 選填布林，省略＝`true`，設 `false` 則該區域保留在檔案但不顯示
-> （validator 直接跳過：不驗證、不廣播、不佔 1000 區域上限）。缺省 fill 為紅色。
+> （validator 直接跳過：不驗證、不廣播、不佔 2000 區域上限）。缺省 fill 為紅色。
 
 **步驟與預期：**
 
